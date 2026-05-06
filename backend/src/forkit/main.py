@@ -97,6 +97,10 @@ _static_dir = pathlib.Path(__file__).parent / "static"
 
 @app.get("/{full_path:path}", include_in_schema=False)
 async def spa_fallback(full_path: str) -> FileResponse:
+    # Trailing-slash variants of API routes reach here because the catch-all
+    # matches before Starlette's redirect_slashes mechanism fires.
+    if full_path.startswith(("api/", "api", "data/")):
+        return JSONResponse({"detail": "Not Found"}, status_code=404)
     if _static_dir.exists():
         candidate = _static_dir / full_path
         if candidate.is_file():
