@@ -84,6 +84,12 @@ async def health() -> dict[str, str]:
     }
 
 
+# Serve uploaded recipe images.  The volume mounts at /data/images in Docker;
+# create the directory locally so StaticFiles doesn't raise on startup.
+_images_dir = pathlib.Path("/data/images")
+_images_dir.mkdir(parents=True, exist_ok=True)
+app.mount("/data/images", StaticFiles(directory=str(_images_dir)), name="images")
+
 # Serve the SPA after all API routes so API routes take precedence.
 # The static/ directory is only present in the Docker image (copied from frontend/build/).
 _static_dir = pathlib.Path(__file__).parent / "static"
