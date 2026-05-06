@@ -35,6 +35,7 @@
 	let clipboardDomain = $state('');
 	let fromShare = $state(false);
 	let preview = $state<RecipePreview | null>(null);
+	let duplicateRecipeId = $state<string | null>(null);
 
 	// Preview card editable fields
 	let recipeTitle = $state('');
@@ -190,6 +191,8 @@
 
 			if (!response.ok) {
 				if (response.status === 409) {
+					const body = await response.json().catch(() => ({}));
+					duplicateRecipeId = body?.detail?.recipe_id ?? null;
 					ingestState = 'error-duplicate';
 					return;
 				}
@@ -462,7 +465,7 @@
 
 		{#if ingestState === 'error-duplicate'}
 			<div class="error-actions">
-				<button type="button" class="btn-primary" onclick={() => goto('/recipes')}>Open it</button>
+				<button type="button" class="btn-primary" onclick={() => goto(duplicateRecipeId ? `/recipes/${duplicateRecipeId}` : '/recipes')}>Open it</button>
 				<button type="button" class="btn-text-secondary" onclick={handleSubmit}>Save a copy anyway</button>
 			</div>
 		{/if}
