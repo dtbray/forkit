@@ -1,37 +1,40 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { formatDuration } from '$lib/utils/duration';
 
 	interface Ingredient {
-		amount: string | null;
+		id: string;
+		position: number;
+		raw_text: string | null;
+		qty: string | null;
 		unit: string | null;
-		name: string;
+		item: string;
 		notes: string | null;
-	}
-
-	interface Instruction {
-		step_number: number;
-		text: string;
+		canonical_token: string | null;
 	}
 
 	interface Recipe {
 		id: string;
 		title: string;
+		description: string | null;
 		source_url: string | null;
 		hero_image_path: string | null;
 		cuisine: string | null;
-		yield_servings: number | null;
-		prep_time_minutes: number | null;
-		cook_time_minutes: number | null;
-		total_time_minutes: number | null;
+		yield_text: string | null;
+		prep_time: string | null;
+		cook_time: string | null;
+		total_time: string | null;
 		favorite: boolean;
 		cook_count: number;
 		last_cooked: string | null;
 		rating: number | null;
 		user_notes: string | null;
+		meal_type: string | null;
 		parser_source: string | null;
+		parser_confidence: number | null;
 		ingredients: Ingredient[];
-		tags: { name: string }[];
-		instructions: Instruction[];
+		tags: string[];
+		instructions: string;
 	}
 
 	interface PageData extends Recipe {}
@@ -46,20 +49,27 @@
 	let deleteDialogOpen: boolean = $state(false);
 
 	// ── Formatting helpers ────────────────────────────────────────────────────────
-	function formatTime(minutes: number | null): string {
-		if (!minutes) return '—';
-		if (minutes < 60) return `${minutes} min`;
-		const h = Math.floor(minutes / 60);
-		const m = minutes % 60;
-		return m > 0 ? `${h} hr ${m} min` : `${h} hr`;
+	function formatDurationOrDash(iso: string | null | undefined): string {
+		return formatDuration(iso) || '—';
 	}
 
 	function formatIngredientAmount(ingredient: Ingredient): string {
 		const parts: string[] = [];
-		if (ingredient.amount) parts.push(ingredient.amount);
+		if (ingredient.qty) parts.push(ingredient.qty);
 		if (ingredient.unit) parts.push(ingredient.unit);
 		return parts.join(' ');
 	}
+
+	// ── Parse instructions (backend stores as JSON string) ───────────────────────
+	const instructionSteps = $derived((): string[] => {
+		if (!data.instructions) return [];
+		try {
+			const parsed = JSON.parse(data.instructions);
+			return Array.isArray(parsed) ? parsed : [];
+		} catch {
+			return [];
+		}
+	});
 
 	function starLabel(star: number): string {
 		const labels = ['', 'Poor', 'Fair', 'Good', 'Great', 'Excellent'];
@@ -179,9 +189,9 @@
 			{#if data.cuisine}
 				<span class="meta-item meta-cuisine">{data.cuisine}</span>
 			{/if}
-			{#if data.yield_servings}
-				<span class="meta-item" aria-label="{data.yield_servings} servings">
-					{data.yield_servings} servings
+			{#if data.yield_text}
+				<span class="meta-item" aria-label="{data.yield_text}">
+					{data.yield_text}
 				</span>
 			{/if}
 		</div>
@@ -190,15 +200,15 @@
 		<div class="time-grid" aria-label="Timing">
 			<div class="time-cell">
 				<span class="time-label">Prep</span>
-				<span class="time-value">{formatTime(data.prep_time_minutes)}</span>
+				<span class="time-value">{formatDurationOrDash(data.prep_time)}</span>
 			</div>
 			<div class="time-cell">
 				<span class="time-label">Cook</span>
-				<span class="time-value">{formatTime(data.cook_time_minutes)}</span>
+				<span class="time-value">{formatDurationOrDash(data.cook_time)}</span>
 			</div>
 			<div class="time-cell time-cell--total">
 				<span class="time-label">Total</span>
-				<span class="time-value">{formatTime(data.total_time_minutes)}</span>
+				<span class="time-value">{formatDurationOrDash(data.total_time)}</span>
 			</div>
 		</div>
 
@@ -219,7 +229,7 @@
 		{#if data.tags.length > 0}
 			<div class="tags-row" aria-label="Tags">
 				{#each data.tags as tag}
-					<span class="tag">{tag.name}</span>
+					<span class="tag">{tag}</span>
 				{/each}
 			</div>
 		{/if}
@@ -230,12 +240,12 @@
 			<ul class="ingredient-list" aria-label="Ingredients">
 				{#each data.ingredients as ingredient}
 					<li class="ingredient-row">
-						{#if ingredient.amount || ingredient.unit}
+						{#if ingredient.qty || ingredient.unit}
 							<span class="ingredient-amount">
 								{formatIngredientAmount(ingredient)}
 							</span>
 						{/if}
-						<span class="ingredient-name">{ingredient.name}</span>
+						<span class="ingredient-name">{ingredient.item}</span>
 						{#if ingredient.notes}
 							<span class="ingredient-notes">{ingredient.notes}</span>
 						{/if}
@@ -248,10 +258,10 @@
 		<section class="recipe-section" aria-labelledby="instructions-heading">
 			<h2 class="section-heading" id="instructions-heading">Instructions</h2>
 			<ol class="instruction-list" aria-label="Instructions">
-				{#each data.instructions as instruction}
-					<li class="instruction-step" value={instruction.step_number}>
-						<span class="step-number" aria-hidden="true">{instruction.step_number}</span>
-						<p class="step-text">{instruction.text}</p>
+				{#each instructionSteps() as step, index}
+					<li class="instruction-step">
+						<span class="step-number" aria-hidden="true">{index + 1}</span>
+						<p class="step-text">{step}</p>
 					</li>
 				{/each}
 			</ol>

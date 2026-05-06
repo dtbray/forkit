@@ -1,16 +1,17 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
+	import { formatDuration } from '$lib/utils/duration';
 
 	interface Recipe {
 		id: string;
 		title: string;
 		hero_image_path: string | null;
 		cuisine: string | null;
-		total_time_minutes: number | null;
+		total_time: string | null;
 		favorite: boolean;
 		cook_count: number;
-		tags: { name: string }[];
+		tags: string[];
 		created_at: string;
 	}
 
@@ -55,14 +56,7 @@
 		applyFilters();
 	}
 
-	// ── Formatting helpers ────────────────────────────────────────────────────────
-	function formatTime(minutes: number | null): string {
-		if (!minutes) return '';
-		if (minutes < 60) return `${minutes} min`;
-		const h = Math.floor(minutes / 60);
-		const m = minutes % 60;
-		return m > 0 ? `${h} hr ${m} min` : `${h} hr`;
-	}
+
 </script>
 
 <svelte:head>
@@ -167,9 +161,9 @@
 								{#if recipe.cuisine}
 									<span class="card-cuisine">{recipe.cuisine}</span>
 								{/if}
-								{#if recipe.total_time_minutes}
-									<span class="card-time" aria-label="{formatTime(recipe.total_time_minutes)} total time">
-										{formatTime(recipe.total_time_minutes)}
+								{#if formatDuration(recipe.total_time)}
+									<span class="card-time" aria-label="{formatDuration(recipe.total_time)} total time">
+										{formatDuration(recipe.total_time)}
 									</span>
 								{/if}
 							</div>
