@@ -1,0 +1,183 @@
+/**
+ * forkit Design Tokens
+ * Source: tokens-2026-05-03.md (Direction A — Pass-Around)
+ * Status: Round 1 — pending Creative Director sign-off
+ *
+ * DO NOT edit values here without Creative Director approval.
+ * This file is generated from the design token source of truth.
+ */
+
+:root {
+  /* ── Color: Brand Primitives ── */
+  --color-bone:           #F8F4EC; /* Primary background; warm off-white */
+  --color-bone-dim:       #EDE8DC; /* Ingredient list pane background */
+  --color-ink:            #1A1A1A; /* Primary text; near-black */
+  --color-ink-secondary:  #4A4540; /* Secondary: units, notes, metadata */
+  --color-ink-tertiary:   #8A837A; /* Tertiary: hints, timestamps, disabled */
+  --color-clay:           #C97B5C; /* Accent; warm clay-persimmon */
+  --color-clay-dim:       #E8C4B2; /* Clay at low opacity; hover states */
+  --color-clay-dark:      #A0573C; /* Clay pressed/active state */
+  --color-surface:        #FFFFFF; /* Card surfaces, modal backgrounds */
+  --color-divider:        #DED8CC; /* Hairline dividers */
+  --color-overlay:        rgba(26, 26, 26, 0.40); /* Modal backdrop */
+
+  /* ── Color: Semantic Tokens ── */
+  --color-bg-primary:     var(--color-bone);
+  --color-bg-secondary:   var(--color-bone-dim);
+  --color-bg-surface:     var(--color-surface);
+  --color-text-primary:   var(--color-ink);
+  --color-text-secondary: var(--color-ink-secondary);
+  --color-text-tertiary:  var(--color-ink-tertiary);
+  --color-text-accent:    var(--color-clay);
+  --color-border:         var(--color-divider);
+  --color-focus-ring:     #C97B5C; /* 3px offset, 2px width */
+  --color-success:        #4A7C59; /* Checked-all celebration */
+  --color-error:          #B5423A; /* Parse error, network error */
+  --color-warning:        #8C6A1F; /* Already in vault notice */
+
+  /* ── Typography: Font Stacks ── */
+  --font-display:  'Source Serif 4', 'Fraunces', Georgia, serif;
+  --font-body:     'Inter', 'SF Pro Text', system-ui, -apple-system, sans-serif;
+  --font-tabular:  'Inter', system-ui, -apple-system, sans-serif;
+  /* Note: activate tabular figures with font-variant-numeric: tabular-nums */
+
+  /* ── Typography: Type Scale ── */
+  /* Size tokens are unitless rem values expressed at 1rem = 16px baseline */
+  --text-display-xl-size:   4rem;     /* 64px — iPad recipe title */
+  --text-display-xl-weight: 700;
+  --text-display-xl-lh:     1.05;
+  --text-display-xl-tracking: -0.02em;
+
+  --text-display-lg-size:   3rem;     /* 48px — Cook view step number */
+  --text-display-lg-weight: 700;
+  --text-display-lg-lh:     1.10;
+  --text-display-lg-tracking: -0.01em;
+
+  --text-display-md-size:   2.25rem;  /* 36px — Cook view step body (L) */
+  --text-display-md-weight: 600;
+  --text-display-md-lh:     1.15;
+  --text-display-md-tracking: 0;
+
+  --text-display-sm-size:   2rem;     /* 32px — Cook view step body (M default) */
+  --text-display-sm-weight: 600;
+  --text-display-sm-lh:     1.20;
+  --text-display-sm-tracking: 0;
+
+  --text-heading-lg-size:   1.5rem;   /* 24px — Section headings */
+  --text-heading-lg-weight: 600;
+  --text-heading-lg-lh:     1.25;
+  --text-heading-lg-tracking: -0.01em;
+
+  --text-heading-md-size:   1.25rem;  /* 20px — Card titles */
+  --text-heading-md-weight: 600;
+  --text-heading-md-lh:     1.30;
+  --text-heading-md-tracking: 0;
+
+  --text-heading-sm-size:   1.125rem; /* 18px — Sub-headings, form labels */
+  --text-heading-sm-weight: 600;
+  --text-heading-sm-lh:     1.35;
+  --text-heading-sm-tracking: 0;
+
+  --text-body-lg-size:      1.375rem; /* 22px — Ingredient rows (iPad) */
+  --text-body-lg-weight:    400;
+  --text-body-lg-lh:        1.55;
+  --text-body-lg-tracking:  0;
+
+  --text-body-md-size:      1.125rem; /* 18px — General body text */
+  --text-body-md-weight:    400;
+  --text-body-md-lh:        1.60;
+  --text-body-md-tracking:  0;
+
+  --text-body-sm-size:      1rem;     /* 16px — Metadata, notes */
+  --text-body-sm-weight:    400;
+  --text-body-sm-lh:        1.60;
+  --text-body-sm-tracking:  0;
+
+  --text-label-md-size:     0.9375rem; /* 15px — Section labels (small caps) */
+  --text-label-md-weight:   500;
+  --text-label-md-lh:       1.40;
+  --text-label-md-tracking: 0.05em;
+
+  --text-label-sm-size:     0.8125rem; /* 13px — Timestamp, tag chips */
+  --text-label-sm-weight:   500;
+  --text-label-sm-lh:       1.40;
+  --text-label-sm-tracking: 0.06em;
+
+  --text-ui-md-size:        1rem;     /* 16px — Button labels, nav items */
+  --text-ui-md-weight:      500;
+  --text-ui-md-lh:          1.40;
+  --text-ui-md-tracking:    0;
+
+  --text-ui-sm-size:        0.875rem; /* 14px — Secondary buttons, type-size toggle */
+  --text-ui-sm-weight:      500;
+  --text-ui-sm-lh:          1.40;
+  --text-ui-sm-tracking:    0;
+
+  /* ── Cook View: Type-Size Toggle ── */
+  /* Set via JS on toggle; persisted to localStorage as forkit.cook.textSize */
+  --cook-step-size:    2rem;          /* 32px — M (default) */
+  --cook-step-size-s:  1.75rem;       /* 28px */
+  --cook-step-size-m:  2rem;          /* 32px */
+  --cook-step-size-l:  2.25rem;       /* 36px */
+  --cook-step-size-xl: 2.625rem;      /* 42px */
+  --cook-ingredient-size-s:  1.25rem; /* 20px */
+  --cook-ingredient-size-m:  1.375rem;/* 22px */
+  --cook-ingredient-size-l:  1.5rem;  /* 24px */
+  --cook-ingredient-size-xl: 1.75rem; /* 28px */
+
+  /* ── Spacing Scale ── */
+  /* Base unit: 4px */
+  --space-1:  4px;   /* Micro gaps, icon padding */
+  --space-2:  8px;   /* Tight internal padding */
+  --space-3:  12px;  /* Icon-to-label gap */
+  --space-4:  16px;  /* Standard internal padding */
+  --space-5:  20px;  /* Ingredient row padding-y */
+  --space-6:  24px;  /* Section gap, card padding */
+  --space-8:  32px;  /* Content section spacing */
+  --space-10: 40px;  /* Generous section breaks */
+  --space-12: 48px;  /* Large structural gaps */
+  --space-16: 64px;  /* Hero image top margin */
+  --space-20: 80px;  /* Step nav bottom anchor offset */
+
+  /* ── Border Radius Scale ── */
+  --radius-sm:   4px;    /* Chips, tags, small badges */
+  --radius-md:   8px;    /* Input fields, cards, buttons */
+  --radius-lg:   12px;   /* Modal sheets, preview cards */
+  --radius-xl:   16px;   /* Image crops (card hero) */
+  --radius-full: 9999px; /* Pill controls, checkbox */
+
+  /* ── Shadow Scale ── */
+  --shadow-none:  none;
+  --shadow-sm:    0 1px 3px rgba(26, 26, 26, 0.08);   /* Cards in list view */
+  --shadow-md:    0 4px 12px rgba(26, 26, 26, 0.12);  /* Modal sheet, preview card */
+  --shadow-lg:    0 8px 24px rgba(26, 26, 26, 0.16);  /* Overlays, pull-down sheets */
+  --shadow-focus: 0 0 0 3px rgba(201, 123, 92, 0.40); /* Clay focus ring */
+
+  /* ── Touch Target Minimums ── */
+  --touch-min:      44px; /* WCAG 2.5.5 AA — all interactive elements */
+  --touch-cook-nav: 60px; /* Cook view step prev/next — kitchen-counter rule */
+
+  /* ── Motion Tokens ── */
+  --transition-fast: 120ms ease-out;      /* State changes (checkbox, button press) */
+  --transition-base: 200ms ease-out;      /* Panel entry, pane fade */
+  --transition-slow: 350ms ease-in-out;   /* Sheet slide-in (ingest form) */
+  --transition-none: 0ms;                 /* Cook view — all step transitions */
+
+  /* ── Z-Index Scale ── */
+  --z-base:     0;  /* Normal document flow */
+  --z-sticky:   10; /* Sticky ingredient section headers */
+  --z-header:   20; /* Cook view header bar */
+  --z-step-nav: 20; /* Bottom-anchored step nav */
+  --z-sheet:    50; /* Ingest sheet, pull-down ingredient overlay */
+  --z-overlay:  60; /* Modal backdrop */
+  --z-modal:    70; /* Modal content (preview card) */
+  --z-toast:    80; /* Celebration state overlay */
+}
+
+/* Reduced motion — cook view is motion-free by default; all surfaces respect this */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition-duration: 0ms !important;
+    animation-duration: 0ms !important;
+  }
+}

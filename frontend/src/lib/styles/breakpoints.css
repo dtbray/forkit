@@ -1,0 +1,51 @@
+/**
+ * forkit breakpoints
+ * Primary design target: iPad landscape 1024–1366px (ADR-001 §3g, mock-spec §1)
+ * Secondary: iPhone portrait, desktop derived layouts.
+ */
+
+:root {
+  --bp-phone-max:               767px;
+  --bp-tablet-portrait-min:     768px;
+  --bp-tablet-portrait-max:     1023px;
+  --bp-tablet-landscape-min:    1024px;
+  --bp-tablet-landscape-max:    1366px;
+  --bp-desktop-min:             1367px;
+}
+
+/* ── Responsive utility classes ── */
+
+.layout-phone-only          { display: block; }
+.layout-tablet-up           { display: none; }
+.layout-tablet-landscape-up { display: none; }
+
+@media (min-width: 768px) {
+  .layout-phone-only { display: none; }
+  .layout-tablet-up  { display: block; }
+}
+
+@media (min-width: 1024px) {
+  .layout-tablet-landscape-up { display: block; }
+}
+
+/**
+ * Cook view split-pane layout (mock-spec §2)
+ * 38% / 62% split — landscape only; collapses in portrait.
+ */
+.cook-layout {
+  display: flex;
+  height: 100%;
+}
+
+.cook-layout__pane-left {
+  width: 100%;
+}
+
+.cook-layout__pane-right {
+  display: none;
+}
+
+@media (min-width: 1024px) {
+  .cook-layout__pane-left  { width: 38%; }
+  .cook-layout__pane-right { display: flex; flex-direction: column; width: 62%; }
+}
