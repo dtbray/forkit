@@ -22,6 +22,8 @@ dependencies = [
     "selectolax",
     "readability-lxml",
     "structlog",
+    "slowapi",
+    "anthropic",
 ]
 
 [project.optional-dependencies]

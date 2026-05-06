@@ -1,0 +1,6 @@
+{
+  "title": "Braised Short Ribs",
+  "ingredient_count": 12,
+  "step_count": 6,
+  "keys_present": ["title", "ingredients", "instructions", "yield_text"]
+}

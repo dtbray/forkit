@@ -1,0 +1,6 @@
+{
+  "title": "Best Chocolate Chip Cookies",
+  "ingredient_count": 11,
+  "step_count": 5,
+  "keys_present": ["title", "ingredients", "instructions", "yield_text"]
+}
