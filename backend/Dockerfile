@@ -43,6 +43,10 @@ COPY --from=builder /install /usr/local
 COPY backend/src ./src
 COPY backend/pyproject.toml ./
 
+# Copy Alembic config + migrations so the container can self-migrate on startup
+COPY alembic.ini ./
+COPY ops/ ./ops/
+
 # Copy frontend static build so FastAPI StaticFiles can serve the SPA
 COPY frontend/build ./src/forkit/static
 
@@ -55,4 +59,5 @@ USER forkit
 
 EXPOSE 8000
 
-CMD ["uvicorn", "forkit.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Run migrations then start the server
+CMD ["sh", "-c", "alembic upgrade head && uvicorn forkit.main:app --host 0.0.0.0 --port 8000"]
