@@ -106,9 +106,15 @@ def _jsonld_to_raw(data: dict[str, Any]) -> dict[str, Any]:
         "yield_text": data.get("recipeYield")
         if isinstance(data.get("recipeYield"), str)
         else (str(data["recipeYield"][0]) if isinstance(data.get("recipeYield"), list) and data["recipeYield"] else None),
-        "cuisine": data.get("recipeCuisine")
-        if isinstance(data.get("recipeCuisine"), str)
-        else None,
+        "cuisine": (
+            data["recipeCuisine"]
+            if isinstance(data.get("recipeCuisine"), str)
+            else (
+                data["recipeCuisine"][0]
+                if isinstance(data.get("recipeCuisine"), list) and data["recipeCuisine"]
+                else None
+            )
+        ),
     }
 
 
