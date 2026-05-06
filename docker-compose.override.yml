@@ -1,0 +1,12 @@
+services:
+  web:
+    ports:
+      - "8080:8000"
+    networks:
+      - forkit-local
+
+networks:
+  hermithost:
+    external: false
+    name: forkit-local
+  forkit-local:

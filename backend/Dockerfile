@@ -17,7 +17,7 @@ COPY backend/pyproject.toml backend/README.md ./
 # Copy source so hatchling can resolve the package metadata
 COPY backend/src ./src
 
-RUN pip install --no-cache-dir --prefix=/install -e .
+RUN pip install --no-cache-dir --prefix=/install .
 
 
 # ── Stage 2: runtime image ─────────────────────────────────────────────────────
@@ -48,6 +48,8 @@ COPY frontend/build ./src/forkit/static
 
 # Ensure the data volume mount-point is owned by forkit before privilege drop
 RUN mkdir -p /data && chown forkit:forkit /data
+
+ENV PYTHONPATH=/app/src
 
 USER forkit
 

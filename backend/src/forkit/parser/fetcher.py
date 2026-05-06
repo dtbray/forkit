@@ -40,7 +40,7 @@ BLOCKED_NETWORKS: list[ipaddress.IPv4Network | ipaddress.IPv6Network] = [
 _FETCH_TIMEOUT = 10.0
 _MAX_REDIRECTS = 5
 _DEFAULT_MAX_BYTES = 5 * 1024 * 1024  # 5 MB
-_USER_AGENT = "forkit/0.1 recipe-fetcher"
+_USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
 
 
 class SSRFBlockedError(Exception):

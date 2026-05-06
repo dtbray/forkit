@@ -156,7 +156,7 @@
 			// ── DEV MOCK ───────────────────────────────────────────────────────
 			// Toggle: set MOCK_INGEST = false to call the real /api/ingest endpoint.
 			// In production (import.meta.env.DEV === false) this block is never entered.
-			const MOCK_INGEST = import.meta.env.DEV;
+			const MOCK_INGEST = false;
 
 			if (MOCK_INGEST) {
 				await new Promise((r) => setTimeout(r, 500));
