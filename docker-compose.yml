@@ -1,2 +1,30 @@
-# Placeholder — real compose ships in Sprint 2 per ADR-001 §3f
-# See clients/self/projects/forkit/specs/adr-001-stack-and-pipeline-2026-05-03.md
+services:
+  web:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    environment:
+      - FORKIT_DB_PATH=/data/forkit.db
+      - FORKIT_IMAGE_DIR=/data/images
+      - HERMITHOST_PORT_MODE=${HERMITHOST_PORT_MODE:-lan}
+    volumes:
+      - forkit-data:/data
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.forkit.rule=Host(`${SERVICE_FQDN_FRONTEND:-forkit.hh}`)"
+      - "traefik.http.services.forkit.loadbalancer.server.port=8000"
+    networks:
+      - hermithost
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  forkit-data:
+
+networks:
+  hermithost:
+    external: true

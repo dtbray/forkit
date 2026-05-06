@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import os
+import pathlib
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
 import structlog
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
@@ -80,3 +82,10 @@ async def health() -> dict[str, str]:
         "db": str(settings.forkit_db_path),
         "image_dir": str(settings.forkit_image_dir),
     }
+
+
+# Serve the SPA after all API routes so API routes take precedence.
+# The static/ directory is only present in the Docker image (copied from frontend/build/).
+_static_dir = pathlib.Path(__file__).parent / "static"
+if _static_dir.exists():
+    app.mount("/", StaticFiles(directory=_static_dir, html=True), name="static")
