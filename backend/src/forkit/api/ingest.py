@@ -7,16 +7,24 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
+import bleach
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, field_validator
+from readability import Document
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from sqlalchemy.orm import Session
 
+from ..config import get_settings
 from ..db import get_session
-from ..models import Ingredient, Recipe
+from ..llm.anthropic import AnthropicProvider
+from ..llm.base import LLMExtractionError
+from ..llm.ollama import OllamaProvider
+from ..llm.router import RoutedLLMProvider
+from ..models import Ingredient, Recipe, Tag, recipe_tag
 from ..parser.fetcher import FetchError, URLForbiddenError, safe_fetch
+from ..parser.images import fetch_and_store_image
 from ..parser.ingredients import structure_ingredient
 from ..parser.jsonld import extract_jsonld
 from ..parser.normalizer import normalize
@@ -45,6 +53,47 @@ class IngestResponse(BaseModel):
     parser_confidence: float
 
 
+def extract_readable_text(html: str) -> str:
+    """Extract main article text from HTML using readability-lxml."""
+    doc = Document(html)
+    content = doc.summary()
+    return bleach.clean(content, tags=[], strip=True)
+
+
+def get_llm_provider(session: Session) -> RoutedLLMProvider:
+    """Build a RoutedLLMProvider from current settings."""
+    settings = get_settings()
+
+    if settings.forkit_llm_primary == "ollama":
+        primary: Any = OllamaProvider(
+            base_url=settings.forkit_ollama_url,
+            model=settings.forkit_ollama_model,
+            timeout_sec=settings.forkit_llm_timeout_sec,
+        )
+    else:
+        primary = AnthropicProvider(
+            api_key=settings.forkit_anthropic_api_key.get_secret_value(),
+            model=settings.forkit_anthropic_model,
+            timeout_sec=settings.forkit_llm_timeout_sec,
+        )
+
+    fallback: Any = None
+    if settings.forkit_llm_fallback == "anthropic":
+        fallback = AnthropicProvider(
+            api_key=settings.forkit_anthropic_api_key.get_secret_value(),
+            model=settings.forkit_anthropic_model,
+            timeout_sec=settings.forkit_llm_timeout_sec,
+        )
+    elif settings.forkit_llm_fallback == "ollama":
+        fallback = OllamaProvider(
+            base_url=settings.forkit_ollama_url,
+            model=settings.forkit_ollama_model,
+            timeout_sec=settings.forkit_llm_timeout_sec,
+        )
+
+    return RoutedLLMProvider(primary=primary, fallback=fallback, session=session)
+
+
 @router.post("/ingest", response_model=IngestResponse)
 @limiter.limit("10/minute")
 async def ingest_recipe(
@@ -60,7 +109,16 @@ async def ingest_recipe(
     """
     log.info("ingest_recipe", url=body.url)
 
-    # Step 1: Fetch
+    # --- Duplicate check ---------------------------------------------------
+    existing = session.query(Recipe).filter_by(source_url=body.url).first()
+    if existing is not None:
+        log.info("ingest duplicate", url=body.url, recipe_id=existing.id)
+        raise HTTPException(
+            status_code=409,
+            detail={"detail": "already_in_vault", "recipe_id": existing.id},
+        )
+
+    # --- Step 1: Fetch -----------------------------------------------------
     try:
         html_bytes = await safe_fetch(body.url)
     except URLForbiddenError as exc:
@@ -72,20 +130,29 @@ async def ingest_recipe(
 
     html = html_bytes.decode("utf-8", errors="replace")
 
-    # Step 2: JSON-LD extraction + adapter fallback
+    # --- Step 2: JSON-LD extraction → LLM fallback ------------------------
     raw = extract_jsonld(html, body.url)
     parser_source = "jsonld"
+    parser_confidence = 1.0
 
     if raw is None:
-        # LLM fallback is v2 — return 422 with informative message
-        log.info("ingest: no structured recipe found, LLM fallback not implemented in v1", url=body.url)
-        raise HTTPException(
-            status_code=422,
-            detail="Could not extract a recipe from that URL. "
-            "The page may not contain structured recipe data.",
-        )
+        log.info("ingest: JSON-LD not found, trying LLM fallback", url=body.url)
+        readable_text = extract_readable_text(html)
+        llm = get_llm_provider(session)
+        try:
+            llm_result = await llm.extract_recipe(readable_text, source_url=body.url)
+        except LLMExtractionError as exc:
+            log.warning("ingest: LLM fallback failed", url=body.url, error=str(exc))
+            raise HTTPException(
+                status_code=422,
+                detail="Could not extract a recipe from that URL. "
+                "The page may not contain structured recipe data.",
+            ) from exc
+        raw = llm_result
+        parser_source = "llm"
+        parser_confidence = float(raw.get("confidence", 0.7)) if isinstance(raw.get("confidence"), (int, float)) else 0.7
 
-    # Step 3: Normalize (sanitize HTML, canonicalize times)
+    # --- Step 3: Normalize -------------------------------------------------
     normalized = normalize(raw)
 
     if not normalized.get("title"):
@@ -94,12 +161,12 @@ async def ingest_recipe(
             detail="Extracted recipe has no title; cannot persist.",
         )
 
-    # Step 4: Structure ingredients
+    # --- Step 4: Structure ingredients ------------------------------------
     structured_ingredients = [
         structure_ingredient(ing) for ing in normalized.get("ingredients") or []
     ]
 
-    # Step 5: Persist
+    # --- Step 5: Persist ---------------------------------------------------
     recipe_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc)
 
@@ -115,7 +182,7 @@ async def ingest_recipe(
         title=normalized["title"],
         description=normalized.get("description"),
         source_url=body.url,
-        hero_image_path=None,  # image fetch is async post-ingest (future)
+        hero_image_path=None,
         yield_text=normalized.get("yield_text"),
         prep_time=normalized.get("prep_time"),
         cook_time=normalized.get("cook_time"),
@@ -123,7 +190,7 @@ async def ingest_recipe(
         cuisine=normalized.get("cuisine"),
         instructions=instructions_json,
         parser_source=parser_source,
-        parser_confidence=1.0,
+        parser_confidence=parser_confidence,
         created_at=now,
         updated_at=now,
     )
@@ -143,6 +210,20 @@ async def ingest_recipe(
         )
         session.add(ingredient)
 
+    # Tags (from LLM result or any future source that provides them)
+    for tag_name in (raw.get("tags") or []):
+        tag_name_clean = str(tag_name).lower().strip()
+        if not tag_name_clean:
+            continue
+        tag = session.query(Tag).filter_by(name=tag_name_clean).first()
+        if not tag:
+            tag = Tag(name=tag_name_clean)
+            session.add(tag)
+            session.flush()
+        session.execute(
+            recipe_tag.insert().values(recipe_id=recipe_id, tag_id=tag.id)
+        )
+
     try:
         session.commit()
     except Exception as exc:
@@ -152,6 +233,24 @@ async def ingest_recipe(
             status_code=500,
             detail="Failed to persist recipe; please try again.",
         ) from exc
+
+    # --- Step 6: Image fetch (non-fatal) -----------------------------------
+    settings = get_settings()
+    image_url = normalized.get("image_url")
+    if image_url:
+        image_path = await fetch_and_store_image(image_url, settings.forkit_image_dir)
+        if image_path:
+            try:
+                recipe_row = session.get(Recipe, recipe_id)
+                if recipe_row is not None:
+                    recipe_row.hero_image_path = image_path
+                    session.commit()
+            except Exception as exc:
+                log.warning(
+                    "ingest: failed to update hero_image_path",
+                    recipe_id=recipe_id,
+                    error=str(exc),
+                )
 
     log.info(
         "ingest complete",
@@ -164,5 +263,5 @@ async def ingest_recipe(
     return {
         "recipe_id": recipe_id,
         "parser_source": parser_source,
-        "parser_confidence": 1.0,
+        "parser_confidence": parser_confidence,
     }

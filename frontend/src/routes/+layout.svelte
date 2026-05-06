@@ -1,4 +1,6 @@
 <script lang="ts">
+	import '@fontsource-variable/inter';
+	import '@fontsource-variable/source-serif-4';
 	import '$lib/styles/tokens.css';
 	import '$lib/styles/breakpoints.css';
 
@@ -18,15 +20,7 @@
 	<!-- App favicon -->
 	<link rel="icon" href="/icons/icon-192.png" type="image/png" />
 
-	<!-- Font preconnects — Source Serif 4 (display) + Inter (body) -->
-	<link rel="preconnect" href="https://fonts.googleapis.com" />
-	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
-	<!--
-		Full font load via <link> in app.html or self-hosted @font-face preferred for production.
-		This preconnect reduces TTFB on first font request.
-		Source Serif 4: optical-size axis (opsz) activated.
-		Fraunces: WONK=1 for display, WONK=0 for tighter sizes.
-	-->
+	<!-- Fonts are self-hosted via @fontsource-variable — no external requests (LAN-safe) -->
 </svelte:head>
 
 <div class="app-shell">

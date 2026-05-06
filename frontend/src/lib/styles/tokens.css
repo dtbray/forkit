@@ -36,9 +36,9 @@
   --color-warning:        #8C6A1F; /* Already in vault notice */
 
   /* ── Typography: Font Stacks ── */
-  --font-display:  'Source Serif 4', 'Fraunces', Georgia, serif;
-  --font-body:     'Inter', 'SF Pro Text', system-ui, -apple-system, sans-serif;
-  --font-tabular:  'Inter', system-ui, -apple-system, sans-serif;
+  --font-display:  'Source Serif 4 Variable', 'Source Serif 4', Georgia, serif;
+  --font-body:     'Inter Variable', 'Inter', system-ui, -apple-system, sans-serif;
+  --font-tabular:  'Inter Variable', 'Inter', system-ui, -apple-system, sans-serif;
   /* Note: activate tabular figures with font-variant-numeric: tabular-nums */
 
   /* ── Typography: Type Scale ── */
