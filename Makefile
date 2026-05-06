@@ -1,31 +1,81 @@
-.PHONY: dev build up down test migrate logs
+.PHONY: dev build up down start stop restart status logs test migrate shell
 
-# Run the backend in development mode with auto-reload
+# ── Dev ────────────────────────────────────────────────────────────────────────
+
+# Backend dev server (auto-reload, no Docker)
 dev:
-	cd backend && uvicorn forkit.main:app --reload --host 0.0.0.0 --port 8000
+	cd backend && uvicorn forkit.main:app --reload --host 0.0.0.0 --port 8001
 
-# Build the frontend then build the Docker image
+# ── Build ──────────────────────────────────────────────────────────────────────
+
+# Build frontend then Docker image
 build:
 	cd frontend && npm run build
 	docker compose build
 
-# Start all services in detached mode
+# Rebuild from scratch (no cache)
+rebuild:
+	cd frontend && npm run build
+	docker compose build --no-cache
+
+# ── Lifecycle ──────────────────────────────────────────────────────────────────
+
+# Start stack (build first if image missing)
+start: up
+
 up:
 	docker compose up -d
+	@echo ""
+	@$(MAKE) --no-print-directory status
 
-# Stop and remove containers
+# Stop containers (preserve data volume)
+stop: down
+
 down:
 	docker compose down
 
-# Run backend and frontend test suites
+# Stop, rebuild image, start
+restart:
+	docker compose down
+	cd frontend && npm run build
+	docker compose build
+	docker compose up -d
+	@echo ""
+	@$(MAKE) --no-print-directory status
+
+# ── Status ─────────────────────────────────────────────────────────────────────
+
+status:
+	@echo "=== containers ==="
+	@docker compose ps
+	@echo ""
+	@echo "=== health ==="
+	@docker compose ps --format "{{.Name}}  {{.Status}}" | grep -v "^$$" || true
+	@echo ""
+	@PORT=$$(docker compose port web 8000 2>/dev/null | cut -d: -f2); \
+	  if [ -n "$$PORT" ]; then \
+	    echo "  app → http://localhost:$$PORT"; \
+	    curl -sf http://localhost:$$PORT/healthz | python3 -m json.tool 2>/dev/null || echo "  (healthz not ready yet)"; \
+	  else \
+	    echo "  (not running)"; \
+	  fi
+
+# ── Data ───────────────────────────────────────────────────────────────────────
+
+# Run Alembic migrations inside the running container
+migrate:
+	docker compose exec web alembic upgrade head
+
+# Open a shell in the web container
+shell:
+	docker compose exec web /bin/bash
+
+# Tail logs (all services, or: make logs s=web)
+logs:
+	docker compose logs -f $(s)
+
+# ── Test ───────────────────────────────────────────────────────────────────────
+
 test:
 	cd backend && python -m pytest
 	cd frontend && npm test
-
-# Run database migrations
-migrate:
-	cd backend && alembic upgrade head
-
-# Tail all service logs
-logs:
-	docker compose logs -f
