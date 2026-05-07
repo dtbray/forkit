@@ -1,14 +1,10 @@
 <script lang="ts">
 	import type { PageData } from './$types';
+	import { formatDuration } from '$lib/utils/duration';
 
 	let { data }: { data: PageData } = $props();
 
 	const { tonight, alternates } = $derived(data);
-
-	function formatTime(minutes: number | null | undefined): string | null {
-		if (minutes == null) return null;
-		return `${minutes} min`;
-	}
 </script>
 
 <svelte:head>
@@ -26,7 +22,7 @@
 				<a href="/recipes/{tonight.id}" class="tonight-card__image-link" tabindex="-1" aria-hidden="true">
 					<div class="tonight-card__image-wrap">
 						<img
-							src={tonight.hero_image_path ?? ''}
+							src={tonight.hero_image_path ? `/data/images/${tonight.hero_image_path}` : ''}
 							alt={tonight.title}
 							class="tonight-card__image"
 							loading="eager"
@@ -44,8 +40,8 @@
 						{#if tonight.cuisine}
 							<span class="meta-chip">{tonight.cuisine}</span>
 						{/if}
-						{#if formatTime(tonight.total_time_minutes)}
-							<span class="meta-chip">{formatTime(tonight.total_time_minutes)}</span>
+						{#if formatDuration(tonight.total_time)}
+							<span class="meta-chip">{formatDuration(tonight.total_time)}</span>
 						{/if}
 						{#if tonight.cook_count > 0}
 							<span class="meta-chip meta-chip--accent">Cooked {tonight.cook_count}×</span>
@@ -74,7 +70,7 @@
 							<a href="/recipes/{recipe.id}" class="alternate-card" aria-label="{recipe.title}{recipe.cuisine ? ` · ${recipe.cuisine}` : ''}">
 								<div class="alternate-card__image-wrap">
 									<img
-										src={recipe.hero_image_path ?? ''}
+										src={recipe.hero_image_path ? `/data/images/${recipe.hero_image_path}` : ''}
 										alt={recipe.title}
 										class="alternate-card__image"
 										loading="lazy"
@@ -91,8 +87,8 @@
 										{#if recipe.cuisine}
 											<span class="meta-chip meta-chip--sm">{recipe.cuisine}</span>
 										{/if}
-										{#if formatTime(recipe.total_time_minutes)}
-											<span class="meta-chip meta-chip--sm">{formatTime(recipe.total_time_minutes)}</span>
+										{#if formatDuration(recipe.total_time)}
+											<span class="meta-chip meta-chip--sm">{formatDuration(recipe.total_time)}</span>
 										{/if}
 										{#if recipe.cook_count > 0}
 											<span class="meta-chip meta-chip--sm meta-chip--accent">Cooked {recipe.cook_count}×</span>

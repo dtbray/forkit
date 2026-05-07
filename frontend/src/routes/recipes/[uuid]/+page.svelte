@@ -60,12 +60,15 @@
 		return parts.join(' ');
 	}
 
-	// ── Parse instructions (backend stores as JSON string) ───────────────────────
+	// ── Parse instructions (backend stores as JSON string of {step_number, text}[]) ──
 	const instructionSteps = $derived((): string[] => {
 		if (!data.instructions) return [];
 		try {
 			const parsed = JSON.parse(data.instructions);
-			return Array.isArray(parsed) ? parsed : [];
+			if (!Array.isArray(parsed)) return [];
+			return parsed
+				.map((s: { text?: string } | string) => (typeof s === 'string' ? s : (s.text ?? '')))
+				.filter(Boolean);
 		} catch {
 			return [];
 		}
@@ -150,7 +153,7 @@
 	<div class="hero-wrap">
 		{#if data.hero_image_path}
 			<img
-				src={data.hero_image_path}
+				src="/data/images/{data.hero_image_path}"
 				alt="{data.title} hero image"
 				class="hero-img"
 				loading="eager"

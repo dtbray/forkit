@@ -127,7 +127,7 @@
 						<div class="card-hero" aria-hidden="true">
 							{#if recipe.hero_image_path}
 								<img
-									src={recipe.hero_image_path}
+									src="/data/images/{recipe.hero_image_path}"
 									alt=""
 									class="card-hero-img"
 									loading="lazy"
