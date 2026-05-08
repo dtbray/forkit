@@ -7,32 +7,25 @@
 	// ── Route param ──────────────────────────────────────────────────────────────
 	const uuid = $derived($page.params.uuid);
 
-	// ── Mock recipe data (stub until E4 backend) ────────────────────────────────
-	const mockRecipe = {
-		title: 'Chocolate Chip Cookies',
-		yield: '48 cookies',
-		ingredients: [
-			{ id: 1, qty: '2¼', unit: 'cups', item: 'all-purpose flour', notes: null },
-			{ id: 2, qty: '1', unit: 'tsp', item: 'baking soda', notes: null },
-			{ id: 3, qty: '1', unit: 'tsp', item: 'salt', notes: null },
-			{ id: 4, qty: '2', unit: 'sticks', item: 'unsalted butter', notes: 'softened' },
-			{ id: 5, qty: '¾', unit: 'cup', item: 'granulated sugar', notes: null },
-			{ id: 6, qty: '¾', unit: 'cup', item: 'packed brown sugar', notes: null },
-			{ id: 7, qty: '2', unit: 'large', item: 'eggs', notes: null },
-			{ id: 8, qty: '2', unit: 'tsp', item: 'vanilla extract', notes: null },
-			{ id: 9, qty: '2', unit: 'cups', item: 'chocolate chips', notes: null }
-		],
-		steps: [
-			'Preheat oven to 375°F. Line baking sheets with parchment paper.',
-			'Whisk flour, baking soda, and salt in a bowl. Set aside.',
-			'Beat butter and both sugars with an electric mixer until light and fluffy, about 3 minutes.',
-			'Add eggs one at a time, beating well after each addition. Mix in vanilla.',
-			'Gradually stir in flour mixture until just combined. Fold in chocolate chips.',
-			'Drop rounded tablespoons of dough onto prepared baking sheets, spacing 2 inches apart.',
-			'Bake 9–11 minutes until edges are golden but centers look slightly underdone.',
-			'Cool on baking sheet 5 minutes, then transfer to wire rack.'
-		]
-	};
+	// ── Recipe data ──────────────────────────────────────────────────────────────
+	interface Ingredient {
+		id: string;
+		qty: string | null;
+		unit: string | null;
+		item: string;
+		notes: string | null;
+	}
+	interface RecipeData {
+		id: string;
+		title: string;
+		yield_text: string | null;
+		ingredients: Ingredient[];
+		instructions: string;
+	}
+
+	let recipe = $state<RecipeData | null>(null);
+	let steps = $state<string[]>([]);
+	let loadError = $state(false);
 
 	// ── State ────────────────────────────────────────────────────────────────────
 	const STORAGE_KEY = 'forkit.cook.textSize';
@@ -46,7 +39,7 @@
 	let textSize: TextSize = $state('M');
 	let currentStep: number = $state(0); // 0-indexed
 	let wakeLockActive: boolean = $state(false);
-	let checkedIngredients: Set<number> = $state(new Set());
+	let checkedIngredients: Set<string> = $state(new Set());
 	let allCheckedCelebration: boolean = $state(false);
 	let showSheet: boolean = $state(false);
 	let showGestureHint: boolean = $state(false);
@@ -55,11 +48,12 @@
 	let ingredientPanelOpen: boolean = $state(false);
 
 	// ── Derived ──────────────────────────────────────────────────────────────────
-	const stepCount = $derived(mockRecipe.steps.length);
+	const ingredients = $derived(recipe?.ingredients ?? []);
+	const stepCount = $derived(steps.length);
 	const isFirstStep = $derived(currentStep === 0);
 	const isLastStep = $derived(currentStep === stepCount - 1);
 	const checkedCount = $derived(checkedIngredients.size);
-	const allChecked = $derived(checkedCount === mockRecipe.ingredients.length);
+	const allChecked = $derived(checkedCount === ingredients.length && ingredients.length > 0);
 	const showPips = $derived(stepCount <= 12);
 
 	const stepSizeMap = getSizeMap();
@@ -74,6 +68,27 @@
 
 	// ── Lifecycle ────────────────────────────────────────────────────────────────
 	onMount(() => {
+		// Fetch real recipe data
+		const currentUuid = $page.params.uuid;
+		fetch(`/api/recipes/${currentUuid}`)
+			.then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+			.then((data: RecipeData) => {
+				recipe = data;
+				try {
+					const parsed = JSON.parse(data.instructions);
+					steps = Array.isArray(parsed)
+						? parsed.map((s: { text?: string } | string) =>
+								typeof s === 'string' ? s : (s.text ?? '')
+							).filter(Boolean)
+						: [];
+				} catch {
+					steps = [];
+				}
+			})
+			.catch(() => {
+				loadError = true;
+			});
+
 		// Restore persisted text size
 		const saved = localStorage.getItem(STORAGE_KEY) as TextSize | null;
 		if (saved && saved in stepSizeMap) {
@@ -220,7 +235,7 @@
 		closeSheet();
 	}
 
-	function toggleIngredient(id: number) {
+	function toggleIngredient(id: string) {
 		const next = new Set(checkedIngredients);
 		if (next.has(id)) {
 			next.delete(id);
@@ -230,7 +245,7 @@
 		checkedIngredients = next;
 
 		// All-checked celebration
-		if (next.size === mockRecipe.ingredients.length) {
+		if (next.size === ingredients.length && ingredients.length > 0) {
 			allCheckedCelebration = true;
 			setTimeout(() => {
 				allCheckedCelebration = false;
@@ -262,7 +277,7 @@
 </script>
 
 <svelte:head>
-	<title>{mockRecipe.title} — Cook — forkit</title>
+	<title>{recipe?.title ?? 'Cook'} — Cook — forkit</title>
 	<!-- Override viewport for cook view only: disable pinch-zoom per Q17 decision.
 	     Mandatory mitigation: in-app S/M/L/XL type-size control is present in header. -->
 	<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
@@ -272,13 +287,13 @@
 	<!-- ── Header ──────────────────────────────────────────────────────────────── -->
 	<header class="cook-header" aria-label="Cook view controls">
 		<!-- Back -->
-		<a href="/" class="header-back" aria-label="Back to recipe">
+		<a href="/recipes/{uuid}" class="header-back" aria-label="Back to recipe">
 			<span class="back-chevron" aria-hidden="true">‹</span>
 			<span class="back-label">Back</span>
 		</a>
 
 		<!-- Title (absolute center) -->
-		<h1 class="header-title" title={mockRecipe.title}>{mockRecipe.title}</h1>
+		<h1 class="header-title" title={recipe?.title ?? ''}>{recipe?.title ?? ''}</h1>
 
 		<!-- Right zone: type-size, wake lock, done -->
 		<div class="header-right">
@@ -331,7 +346,7 @@
 				aria-controls="portrait-ingredient-panel"
 				onclick={() => (ingredientPanelOpen = !ingredientPanelOpen)}
 			>
-				Ingredients · {checkedCount} of {mockRecipe.ingredients.length} done
+				Ingredients · {checkedCount} of {ingredients.length} done
 			</button>
 
 			{#if ingredientPanelOpen}
@@ -341,7 +356,7 @@
 					aria-label="Ingredients"
 				>
 					<ul class="ingredient-list" aria-label="Ingredients">
-						{#each mockRecipe.ingredients as ing (ing.id)}
+						{#each ingredients as ing (ing.id)}
 							<li class="ingredient-row" class:ingredient-row--checked={checkedIngredients.has(ing.id)}>
 								<label class="ingredient-label">
 									<input
@@ -378,12 +393,12 @@
 						class="ingredient-section-header"
 						class:ingredient-section-header--celebration={allCheckedCelebration}
 					>
-						Ingredients · serves {mockRecipe.yield}
+						Ingredients · serves {recipe?.yield_text ?? ''}
 					</h2>
 
 					<!-- Ingredient list -->
 					<ul class="ingredient-list" aria-label="Ingredients">
-						{#each mockRecipe.ingredients as ing (ing.id)}
+						{#each ingredients as ing (ing.id)}
 							<li
 								class="ingredient-row"
 								class:ingredient-row--checked={checkedIngredients.has(ing.id)}
@@ -432,7 +447,7 @@
 		<section class="step-pane" aria-label="Recipe steps">
 			<!-- Steps list (semantic ol, only active step shown) -->
 			<ol class="step-list" aria-label="Recipe steps">
-				{#each mockRecipe.steps as step, idx}
+				{#each steps as step, idx}
 					<li
 						class="step-item"
 						class:step-item--active={idx === currentStep}
@@ -486,7 +501,7 @@
 					<span class="step-indicator-text">Step {currentStep + 1} of {stepCount}</span>
 					{#if showPips}
 						<div class="step-pips" aria-hidden="true">
-							{#each mockRecipe.steps as _, idx}
+							{#each steps as _, idx}
 								<span
 									class="pip"
 									class:pip--active={idx === currentStep}
@@ -519,7 +534,7 @@
 			aria-label="Did you make it?"
 		>
 			<h2 class="sheet-heading">Did you make it?</h2>
-			<p class="sheet-recipe-name">{mockRecipe.title}</p>
+			<p class="sheet-recipe-name">{recipe?.title ?? ''}</p>
 			<div class="sheet-actions">
 				<button class="sheet-btn sheet-btn--primary" onclick={markCooked}>
 					We made it
