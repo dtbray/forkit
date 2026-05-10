@@ -1,31 +1,27 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
 	import { page } from '$app/stores';
+	import { goto } from '$app/navigation';
 	import { requestWakeLock, releaseWakeLock, isWakeLockActive } from '$lib/wake-lock';
 	import { getSizeMap, getIngredientSizeMap, type TextSize } from '$lib/cook-view-size';
+	import type { PageData } from './$types';
 
-	// ── Route param ──────────────────────────────────────────────────────────────
-	const uuid = $derived($page.params.uuid);
+	// ── Props ─────────────────────────────────────────────────────────────────────
+	let { data }: { data: PageData } = $props();
 
-	// ── Recipe data ──────────────────────────────────────────────────────────────
-	interface Ingredient {
-		id: string;
-		qty: string | null;
-		unit: string | null;
-		item: string;
-		notes: string | null;
-	}
-	interface RecipeData {
-		id: string;
-		title: string;
-		yield_text: string | null;
-		ingredients: Ingredient[];
-		instructions: string;
-	}
-
-	let recipe = $state<RecipeData | null>(null);
-	let steps = $state<string[]>([]);
-	let loadError = $state(false);
+	// ── Parse steps once from load data ──────────────────────────────────────────
+	const steps = (() => {
+		try {
+			const parsed = JSON.parse(data.instructions ?? '[]');
+			return Array.isArray(parsed)
+				? parsed
+						.map((s: { text?: string } | string) => (typeof s === 'string' ? s : (s.text ?? '')))
+						.filter(Boolean)
+				: [];
+		} catch {
+			return [];
+		}
+	})();
 
 	// ── State ────────────────────────────────────────────────────────────────────
 	const STORAGE_KEY = 'forkit.cook.textSize';
@@ -47,8 +43,12 @@
 	let portraitMode: boolean = $state(false);
 	let ingredientPanelOpen: boolean = $state(false);
 
+	// ── Confirmation sheet state ─────────────────────────────────────────────────
+	let confirmationState: 'prompt' | 'success' | 'error' = $state('prompt');
+	let newCookCount = $state<number | null>(null);
+
 	// ── Derived ──────────────────────────────────────────────────────────────────
-	const ingredients = $derived(recipe?.ingredients ?? []);
+	const ingredients = $derived(data.ingredients ?? []);
 	const stepCount = $derived(steps.length);
 	const isFirstStep = $derived(currentStep === 0);
 	const isLastStep = $derived(currentStep === stepCount - 1);
@@ -68,27 +68,6 @@
 
 	// ── Lifecycle ────────────────────────────────────────────────────────────────
 	onMount(() => {
-		// Fetch real recipe data
-		const currentUuid = $page.params.uuid;
-		fetch(`/api/recipes/${currentUuid}`)
-			.then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
-			.then((data: RecipeData) => {
-				recipe = data;
-				try {
-					const parsed = JSON.parse(data.instructions);
-					steps = Array.isArray(parsed)
-						? parsed.map((s: { text?: string } | string) =>
-								typeof s === 'string' ? s : (s.text ?? '')
-							).filter(Boolean)
-						: [];
-				} catch {
-					steps = [];
-				}
-			})
-			.catch(() => {
-				loadError = true;
-			});
-
 		// Restore persisted text size
 		const saved = localStorage.getItem(STORAGE_KEY) as TextSize | null;
 		if (saved && saved in stepSizeMap) {
@@ -223,16 +202,20 @@
 
 	function closeSheet() {
 		showSheet = false;
+		confirmationState = 'prompt';
+		newCookCount = null;
 	}
 
 	async function markCooked() {
 		try {
-			await fetch(`/api/recipes/${uuid}/cook`, { method: 'POST' });
+			const res = await fetch(`/api/recipes/${data.id}/cook`, { method: 'POST' });
+			if (!res.ok) throw new Error('failed');
+			const body = await res.json();
+			newCookCount = body.cook_count;
+			confirmationState = 'success';
 		} catch {
-			// Endpoint not yet implemented — silent fail in dev
-			// TODO: wire to real endpoint when E4 ships
+			confirmationState = 'error';
 		}
-		closeSheet();
 	}
 
 	function toggleIngredient(id: string) {
@@ -277,7 +260,7 @@
 </script>
 
 <svelte:head>
-	<title>{recipe?.title ?? 'Cook'} — Cook — forkit</title>
+	<title>{data.title ?? 'Cook'} — Cook — forkit</title>
 	<!-- Override viewport for cook view only: disable pinch-zoom per Q17 decision.
 	     Mandatory mitigation: in-app S/M/L/XL type-size control is present in header. -->
 	<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
@@ -287,13 +270,13 @@
 	<!-- ── Header ──────────────────────────────────────────────────────────────── -->
 	<header class="cook-header" aria-label="Cook view controls">
 		<!-- Back -->
-		<a href="/recipes/{uuid}" class="header-back" aria-label="Back to recipe">
+		<a href="/recipes/{data.id}" class="header-back" aria-label="Back to recipe">
 			<span class="back-chevron" aria-hidden="true">‹</span>
 			<span class="back-label">Back</span>
 		</a>
 
 		<!-- Title (absolute center) -->
-		<h1 class="header-title" title={recipe?.title ?? ''}>{recipe?.title ?? ''}</h1>
+		<h1 class="header-title" title={data.title ?? ''}>{data.title ?? ''}</h1>
 
 		<!-- Right zone: type-size, wake lock, done -->
 		<div class="header-right">
@@ -346,7 +329,8 @@
 				aria-controls="portrait-ingredient-panel"
 				onclick={() => (ingredientPanelOpen = !ingredientPanelOpen)}
 			>
-				Ingredients · {checkedCount} of {ingredients.length} done
+				<span>Ingredients · {checkedCount} of {ingredients.length} done</span>
+				<span class="chip-chevron" class:chip-chevron--open={ingredientPanelOpen} aria-hidden="true">›</span>
 			</button>
 
 			{#if ingredientPanelOpen}
@@ -393,7 +377,7 @@
 						class="ingredient-section-header"
 						class:ingredient-section-header--celebration={allCheckedCelebration}
 					>
-						Ingredients · serves {recipe?.yield_text ?? ''}
+						Ingredients · serves {data.yield_text ?? ''}
 					</h2>
 
 					<!-- Ingredient list -->
@@ -527,22 +511,29 @@
 	<!-- ── "We made this?" sheet ──────────────────────────────────────────────── -->
 	{#if showSheet}
 		<div class="sheet-backdrop" onclick={closeSheet} aria-hidden="true"></div>
-		<div
-			class="we-made-this-sheet"
-			role="dialog"
-			aria-modal="true"
-			aria-label="Did you make it?"
-		>
-			<h2 class="sheet-heading">Did you make it?</h2>
-			<p class="sheet-recipe-name">{recipe?.title ?? ''}</p>
-			<div class="sheet-actions">
-				<button class="sheet-btn sheet-btn--primary" onclick={markCooked}>
-					We made it
-				</button>
-				<button class="sheet-btn sheet-btn--ghost" onclick={closeSheet}>
-					Not this time
-				</button>
-			</div>
+		<div class="we-made-this-sheet" role="dialog" aria-modal="true" aria-label="Did you make it?">
+			{#if confirmationState === 'prompt'}
+				<h2 class="sheet-heading">Did you make it?</h2>
+				<p class="sheet-recipe-name">{data.title}</p>
+				<div class="sheet-actions">
+					<button class="sheet-btn sheet-btn--primary" onclick={markCooked}>We made it</button>
+					<button class="sheet-btn sheet-btn--ghost" onclick={closeSheet}>Not this time</button>
+				</div>
+			{:else if confirmationState === 'success'}
+				<h2 class="sheet-heading" aria-live="polite">Logged! Cook #{newCookCount}</h2>
+				<p class="sheet-recipe-name">{data.title}</p>
+				<div class="sheet-actions">
+					<button class="sheet-btn sheet-btn--primary" onclick={() => goto('/recipes')}>Browse recipes</button>
+					<button class="sheet-btn sheet-btn--ghost" onclick={() => goto(`/recipes/${data.id}`)}>Back to recipe</button>
+				</div>
+			{:else}
+				<h2 class="sheet-heading">Couldn't save</h2>
+				<p class="sheet-recipe-name">Want to try again?</p>
+				<div class="sheet-actions">
+					<button class="sheet-btn sheet-btn--primary" onclick={markCooked}>Retry</button>
+					<button class="sheet-btn sheet-btn--ghost" onclick={closeSheet}>Dismiss</button>
+				</div>
+			{/if}
 		</div>
 	{/if}
 </main>
@@ -1171,6 +1162,27 @@
 		font-weight: var(--text-label-md-weight);
 		color: var(--color-ink-secondary);
 		text-align: left;
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+	}
+
+	.chip-chevron {
+		font-size: 1.25rem;
+		line-height: 1;
+		transition: transform var(--transition-fast, 150ms ease);
+		display: inline-block;
+		transform: rotate(90deg);
+	}
+
+	.chip-chevron--open {
+		transform: rotate(-90deg);
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.chip-chevron {
+			transition: none;
+		}
 	}
 
 	.portrait-ingredient-panel {
