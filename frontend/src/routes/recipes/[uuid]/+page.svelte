@@ -304,13 +304,6 @@
 			</p>
 		{/if}
 
-		<!-- ── CTA: Start Cooking ────────────────────────────────────────────────── -->
-		<div class="cta-row">
-			<a href="/cook/{data.id}" class="btn-cook">
-				Start Cooking
-			</a>
-		</div>
-
 		<!-- ── Danger zone: Delete ──────────────────────────────────────────────── -->
 		<div class="danger-zone" aria-label="Danger zone">
 			<button class="btn-delete" onclick={requestDelete} aria-label="Delete this recipe permanently">
@@ -318,6 +311,13 @@
 			</button>
 		</div>
 	</article>
+
+	<!-- ── Sticky CTA footer ─────────────────────────────────────────────────── -->
+	<div class="cta-footer">
+		<a href="/cook/{data.id}" class="btn-cook" aria-label="Start cooking {data.title}">
+			Start Cooking
+		</a>
+	</div>
 </main>
 
 <style>
@@ -325,7 +325,7 @@
 	.detail-page {
 		flex: 1;
 		background-color: var(--color-bone);
-		padding-bottom: var(--space-16);
+		padding-bottom: calc(88px + env(safe-area-inset-bottom));
 	}
 
 	/* ── Screen reader only ─────────────────────────────────────────────────── */
@@ -766,9 +766,24 @@
 		border-radius: var(--radius-sm);
 	}
 
-	/* ── CTA row ─────────────────────────────────────────────────────────────── */
-	.cta-row {
-		margin-top: var(--space-10);
+	/* ── Sticky CTA footer ───────────────────────────────────────────────────── */
+	.cta-footer {
+		position: fixed;
+		bottom: 0;
+		left: 0;
+		right: 0;
+		z-index: var(--z-sticky, 40);
+		background-color: var(--color-bone);
+		border-top: 1px solid var(--color-divider);
+		padding: var(--space-4) var(--space-6) calc(var(--space-4) + env(safe-area-inset-bottom));
+		box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.04);
+		display: flex;
+		justify-content: center;
+	}
+
+	.cta-footer .btn-cook {
+		width: 100%;
+		max-width: 720px;
 	}
 
 	.btn-cook {
@@ -796,13 +811,6 @@
 		outline: 2px solid var(--color-focus-ring);
 		outline-offset: 3px;
 		box-shadow: var(--shadow-focus);
-	}
-
-	@media (min-width: 768px) {
-		.btn-cook {
-			width: auto;
-			padding: 0 var(--space-12);
-		}
 	}
 
 	/* ── Danger zone ─────────────────────────────────────────────────────────── */
