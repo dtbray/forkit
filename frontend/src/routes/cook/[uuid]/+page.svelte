@@ -909,6 +909,10 @@
 		gap: var(--space-4); /* 16px */
 	}
 
+	.step-item[hidden] {
+		display: none;
+	}
+
 	/* Step number */
 	.step-number {
 		font-family: var(--font-display);
