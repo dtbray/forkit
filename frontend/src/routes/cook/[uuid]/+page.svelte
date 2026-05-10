@@ -1067,7 +1067,7 @@
 		position: fixed;
 		inset: 0;
 		background-color: var(--color-overlay);
-		z-index: var(--z-overlay);
+		z-index: var(--z-sheet); /* same layer as sheet — sheet comes after in DOM */
 	}
 
 	.we-made-this-sheet {
@@ -1075,7 +1075,7 @@
 		bottom: 0;
 		left: 0;
 		right: 0;
-		z-index: var(--z-sheet);
+		z-index: calc(var(--z-sheet) + 1); /* always above its own backdrop */
 		background-color: var(--color-surface);
 		border-radius: var(--radius-lg) var(--radius-lg) 0 0;
 		box-shadow: var(--shadow-lg);
