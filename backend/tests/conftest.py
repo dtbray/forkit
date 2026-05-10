@@ -6,6 +6,12 @@ import tempfile
 import os
 from pathlib import Path
 
+# Set writable paths before any app module is imported — main.py calls
+# get_settings() and mkdir() at module level, so the env var must be present
+# before pytest collects (imports) test modules that import `app`.
+os.environ.setdefault("FORKIT_IMAGE_DIR", str(Path(tempfile.gettempdir()) / "forkit_test_images"))
+os.environ.setdefault("FORKIT_DB_PATH", str(Path(tempfile.gettempdir()) / "forkit_test.db"))
+
 import pytest
 from alembic import command
 from alembic.config import Config

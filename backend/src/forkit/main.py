@@ -84,9 +84,9 @@ async def health() -> dict[str, str]:
     }
 
 
-# Serve uploaded recipe images.  The volume mounts at /data/images in Docker;
-# create the directory locally so StaticFiles doesn't raise on startup.
-_images_dir = pathlib.Path("/data/images")
+# Serve uploaded recipe images from the settings-driven image dir.
+# In Docker this resolves to /data/images; in local dev it follows FORKIT_IMAGE_DIR.
+_images_dir = pathlib.Path(get_settings().forkit_image_dir)
 _images_dir.mkdir(parents=True, exist_ok=True)
 app.mount("/data/images", StaticFiles(directory=str(_images_dir)), name="images")
 
