@@ -18,10 +18,10 @@ import re
 import uuid
 from urllib.parse import quote_plus, urlparse
 
-import bleach
 import structlog
 
 from ...parser.fetcher import FetchError, URLForbiddenError, safe_fetch
+from ..sanitize import sanitize as _sanitize
 from ..schemas import RecipeStub, SourceSite
 from .base import SiteAdapter
 
@@ -32,14 +32,6 @@ _SENSITIVE_KEY_RE = re.compile(r"(api_key|secret|token)", re.IGNORECASE)
 
 # Log-once guard: emit the "key missing" warning at most once per process
 _warned_missing_key: set[str] = set()
-
-
-def _sanitize(text: str | None) -> str | None:
-    """Strip all HTML tags — security condition S5."""
-    if not text:
-        return None
-    cleaned = bleach.clean(text, tags=[], attributes={}, strip=True).strip()
-    return cleaned or None
 
 
 def _safe_url(url: str) -> str | None:

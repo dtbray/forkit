@@ -15,7 +15,6 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlparse
 
-import bleach
 import structlog
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
@@ -26,6 +25,7 @@ from ..models.recipe import Recipe
 from ..models.search_cache import SearchCache
 from .adapters.base import SiteAdapter
 from .registry import get_adapter
+from .sanitize import sanitize as _sanitize_fn
 from .schemas import RecipeStub, SearchResponse, SiteSearchResult
 
 log = structlog.get_logger()
@@ -50,11 +50,8 @@ def _canonicalize_url(url: str) -> str:
 
 
 def _sanitize(text: str | None) -> str | None:
-    """Strip all HTML — security condition S5."""
-    if not text:
-        return None
-    cleaned = bleach.clean(text, tags=[], attributes={}, strip=True).strip()
-    return cleaned or None
+    """Strip all HTML — security condition S5. Delegates to shared sanitize module."""
+    return _sanitize_fn(text)
 
 
 async def _search_one(

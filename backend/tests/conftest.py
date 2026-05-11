@@ -11,6 +11,7 @@ from pathlib import Path
 # before pytest collects (imports) test modules that import `app`.
 os.environ.setdefault("FORKIT_IMAGE_DIR", str(Path(tempfile.gettempdir()) / "forkit_test_images"))
 os.environ.setdefault("FORKIT_DB_PATH", str(Path(tempfile.gettempdir()) / "forkit_test.db"))
+os.environ.setdefault("FORKIT_DISABLE_SCHEDULER", "1")
 
 import pytest
 from alembic import command

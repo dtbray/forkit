@@ -7,12 +7,14 @@ from __future__ import annotations
 
 from ..models.discovery_site import DiscoverySite
 from .adapters.base import SiteAdapter
+from .adapters.feed import FeedAdapter
 from .adapters.google_cse import GoogleCseAdapter
 from .adapters.html_scrape import HtmlScrapeAdapter
 
 ADAPTERS: dict[str, type[SiteAdapter]] = {
     "html_scrape": HtmlScrapeAdapter,
     "google_cse": GoogleCseAdapter,
+    "feed_only": FeedAdapter,
 }
 
 

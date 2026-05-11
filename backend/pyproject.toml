@@ -24,6 +24,9 @@ dependencies = [
     "structlog",
     "slowapi",
     "anthropic",
+    "apscheduler>=3.10,<4",
+    "feedparser>=6.0",
+    "defusedxml>=0.7",
 ]
 
 [project.optional-dependencies]
