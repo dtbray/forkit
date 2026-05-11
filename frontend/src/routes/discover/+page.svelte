@@ -156,6 +156,13 @@
 						{site.name}
 					</button>
 				{/each}
+				<a href="/settings/discovery" class="manage-sites-link" aria-label="Manage discovery sites">
+					<svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true" focusable="false">
+						<path d="M6.5 8a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z" stroke="currentColor" stroke-width="1.2"/>
+						<path d="M10.5 6.5a4 4 0 0 1-.09.87l1.18.86a.3.3 0 0 1 .07.38l-1.12 1.94a.3.3 0 0 1-.36.13l-1.39-.56a4.1 4.1 0 0 1-.75.43l-.21 1.48a.3.3 0 0 1-.3.25H5.57a.3.3 0 0 1-.3-.25l-.21-1.48a4.1 4.1 0 0 1-.75-.43l-1.39.56a.3.3 0 0 1-.36-.13L1.44 8.61a.3.3 0 0 1 .07-.38l1.18-.86A4.05 4.05 0 0 1 2.5 6.5c0-.3.03-.6.09-.87L1.41 4.77a.3.3 0 0 1-.07-.38l1.12-1.94a.3.3 0 0 1 .36-.13l1.39.56c.23-.16.48-.3.75-.43l.21-1.48A.3.3 0 0 1 5.47 2h2.06c.15 0 .28.11.3.25l.21 1.48c.27.13.52.27.75.43l1.39-.56a.3.3 0 0 1 .36.13l1.12 1.94a.3.3 0 0 1-.07.38l-1.18.86c.06.27.09.57.09.87Z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>
+					</svg>
+					Manage sites
+				</a>
 			</div>
 		{:else if sitesLoading}
 			<!-- Skeleton chips while loading -->
@@ -336,6 +343,46 @@
 		display: flex;
 		flex-wrap: wrap;
 		gap: var(--space-2);
+	}
+
+	.manage-sites-link {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.3em;
+		margin-left: auto;
+		font-family: var(--font-body);
+		font-size: var(--text-label-sm-size);
+		color: var(--color-ink-tertiary);
+		text-decoration: underline;
+		text-decoration-color: transparent;
+		text-underline-offset: 2px;
+		border-radius: var(--radius-sm);
+		white-space: nowrap;
+		transition: color 150ms ease, text-decoration-color 150ms ease;
+	}
+
+	.manage-sites-link:hover {
+		color: var(--color-clay);
+		text-decoration-color: var(--color-clay);
+	}
+
+	.manage-sites-link:active {
+		color: var(--color-clay-dark);
+	}
+
+	.manage-sites-link:focus-visible {
+		outline: 2px solid var(--color-clay);
+		outline-offset: 3px;
+		color: var(--color-clay);
+		text-decoration-color: var(--color-clay);
+	}
+
+	.manage-sites-link:focus:not(:focus-visible) {
+		outline: none;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.manage-sites-link { transition: none; }
 	}
 
 	.site-chip {
