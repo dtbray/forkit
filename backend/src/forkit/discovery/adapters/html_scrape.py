@@ -20,7 +20,7 @@ import structlog
 from selectolax.parser import HTMLParser
 
 from ...models.discovery_site import DiscoverySite
-from ...parser.fetcher import FetchError, URLForbiddenError, safe_fetch
+from ...parser.fetcher import safe_fetch
 from ..schemas import RecipeStub, SourceSite
 from .base import SiteAdapter
 
@@ -101,24 +101,9 @@ class HtmlScrapeAdapter(SiteAdapter):
             return []
 
         # S1 — use safe_fetch, never raw httpx
-        try:
-            html_bytes = await safe_fetch(search_url)
-        except (FetchError, URLForbiddenError) as exc:
-            log.warning(
-                "html_scrape: fetch failed",
-                site=self.site.slug,
-                url=search_url,
-                error=str(exc),
-            )
-            return []
-        except Exception as exc:
-            log.error(
-                "html_scrape: unexpected fetch error",
-                site=self.site.slug,
-                url=search_url,
-                error=str(exc),
-            )
-            return []
+        # FetchError/URLForbiddenError propagate to callers so test_site() and
+        # _search_one() can surface meaningful ok=false / error messages.
+        html_bytes = await safe_fetch(search_url)
 
         html = html_bytes.decode("utf-8", errors="replace")
         return self._parse(html, search_url, limit)
