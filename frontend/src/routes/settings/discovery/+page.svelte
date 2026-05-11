@@ -53,6 +53,34 @@
 		}
 	}
 
+	// ── Toggle feed_enabled ───────────────────────────────────────────────────────
+
+	async function handleFeedToggle(site: DiscoverySite) {
+		if (togglePending[site.id]) return;
+
+		togglePending = { ...togglePending, [site.id]: true };
+
+		const prevValue = site.feed_enabled;
+		sites = sites.map((s) =>
+			s.id === site.id ? { ...s, feed_enabled: !s.feed_enabled } : s
+		);
+
+		try {
+			const res = await fetch(`/api/discovery/sites/${site.id}`, {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ feed_enabled: !prevValue })
+			});
+			if (!res.ok) throw new Error(`HTTP ${res.status}`);
+		} catch {
+			sites = sites.map((s) =>
+				s.id === site.id ? { ...s, feed_enabled: prevValue } : s
+			);
+		} finally {
+			togglePending = { ...togglePending, [site.id]: false };
+		}
+	}
+
 	// ── Test site ──────────────────────────────────────────────────────────────────
 
 	async function handleTest(site: DiscoverySite) {
@@ -203,23 +231,48 @@
 						</button>
 
 						<!-- search_enabled toggle -->
-						<label class="toggle-label" aria-label="Enable {site.name} in search">
-							<input
-								type="checkbox"
-								class="sr-only"
-								checked={site.search_enabled}
-								disabled={togglePending[site.id]}
-								onchange={() => handleToggle(site)}
-								aria-label="{site.search_enabled ? 'Disable' : 'Enable'} {site.name}"
-							/>
-							<span
-								class="toggle-track"
-								class:toggle-track--on={site.search_enabled}
-								aria-hidden="true"
-							>
-								<span class="toggle-thumb"></span>
-							</span>
-						</label>
+						<div class="toggle-group">
+							<span class="toggle-caption">Search</span>
+							<label class="toggle-label" aria-label="Enable {site.name} in search">
+								<input
+									type="checkbox"
+									class="sr-only"
+									checked={site.search_enabled}
+									disabled={togglePending[site.id]}
+									onchange={() => handleToggle(site)}
+									aria-label="{site.search_enabled ? 'Disable' : 'Enable'} {site.name} in search"
+								/>
+								<span
+									class="toggle-track"
+									class:toggle-track--on={site.search_enabled}
+									aria-hidden="true"
+								>
+									<span class="toggle-thumb"></span>
+								</span>
+							</label>
+						</div>
+
+						<!-- feed_enabled toggle -->
+						<div class="toggle-group">
+							<span class="toggle-caption">Feed</span>
+							<label class="toggle-label" aria-label="Enable {site.name} feed">
+								<input
+									type="checkbox"
+									class="sr-only"
+									checked={site.feed_enabled}
+									disabled={togglePending[site.id]}
+									onchange={() => handleFeedToggle(site)}
+									aria-label="{site.feed_enabled ? 'Disable' : 'Enable'} {site.name} feed"
+								/>
+								<span
+									class="toggle-track"
+									class:toggle-track--on={site.feed_enabled}
+									aria-hidden="true"
+								>
+									<span class="toggle-thumb"></span>
+								</span>
+							</label>
+						</div>
 					</div>
 				</li>
 			{/each}
@@ -499,6 +552,21 @@
 		align-items: center;
 		gap: var(--space-4);
 		flex-shrink: 0;
+	}
+
+	.toggle-group {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 2px;
+	}
+
+	.toggle-caption {
+		font-family: var(--font-body);
+		font-size: 10px;
+		color: var(--color-ink-tertiary);
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
 	}
 
 	.btn-test {

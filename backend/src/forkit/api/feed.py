@@ -61,6 +61,7 @@ class InboxResponse(BaseModel):
     page: int
     limit: int
     total: int
+    pages: int
 
 
 class PromoteRequest(BaseModel):
@@ -176,7 +177,9 @@ async def get_inbox(
         for item in items
     ]
 
-    return InboxResponse(items=out_items, page=page, limit=limit, total=total)
+    import math
+    pages = max(1, math.ceil(total / limit)) if total > 0 else 1
+    return InboxResponse(items=out_items, page=page, limit=limit, total=total, pages=pages)
 
 
 @router.post("/feed/promote", response_model=PromoteResponse)
