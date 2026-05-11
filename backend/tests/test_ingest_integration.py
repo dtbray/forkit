@@ -118,8 +118,8 @@ def test_ingest_jsonld_success_full_pipeline(test_client_with_db):
 
     # Mock safe_fetch to return our HTML fixture; image fetch returns None (non-fatal)
     with (
-        patch("forkit.api.ingest.safe_fetch", new=AsyncMock(return_value=_JSONLD_HTML.encode())),
-        patch("forkit.api.ingest.fetch_and_store_image", new=AsyncMock(return_value=None)),
+        patch("forkit.services.ingest.safe_fetch", new=AsyncMock(return_value=_JSONLD_HTML.encode())),
+        patch("forkit.services.ingest.fetch_and_store_image", new=AsyncMock(return_value=None)),
     ):
         resp = client.post("/api/ingest", json={"url": _RECIPE_URL})
 
@@ -157,8 +157,8 @@ def test_ingest_sets_hero_image_path_when_image_fetch_succeeds(test_client_with_
     fake_image_path = "abc123/hero.webp"
 
     with (
-        patch("forkit.api.ingest.safe_fetch", new=AsyncMock(return_value=_JSONLD_HTML.encode())),
-        patch("forkit.api.ingest.fetch_and_store_image", new=AsyncMock(return_value=fake_image_path)),
+        patch("forkit.services.ingest.safe_fetch", new=AsyncMock(return_value=_JSONLD_HTML.encode())),
+        patch("forkit.services.ingest.fetch_and_store_image", new=AsyncMock(return_value=fake_image_path)),
     ):
         resp = client.post("/api/ingest", json={"url": _RECIPE_URL})
 
@@ -176,8 +176,8 @@ def test_ingest_hero_image_null_when_image_fetch_fails(test_client_with_db):
     client, SessionLocal = test_client_with_db
 
     with (
-        patch("forkit.api.ingest.safe_fetch", new=AsyncMock(return_value=_JSONLD_HTML.encode())),
-        patch("forkit.api.ingest.fetch_and_store_image", new=AsyncMock(return_value=None)),
+        patch("forkit.services.ingest.safe_fetch", new=AsyncMock(return_value=_JSONLD_HTML.encode())),
+        patch("forkit.services.ingest.fetch_and_store_image", new=AsyncMock(return_value=None)),
     ):
         resp = client.post("/api/ingest", json={"url": _RECIPE_URL})
 
@@ -195,8 +195,8 @@ def test_ingest_duplicate_returns_409(test_client_with_db):
     client, SessionLocal = test_client_with_db
 
     with (
-        patch("forkit.api.ingest.safe_fetch", new=AsyncMock(return_value=_JSONLD_HTML.encode())),
-        patch("forkit.api.ingest.fetch_and_store_image", new=AsyncMock(return_value=None)),
+        patch("forkit.services.ingest.safe_fetch", new=AsyncMock(return_value=_JSONLD_HTML.encode())),
+        patch("forkit.services.ingest.fetch_and_store_image", new=AsyncMock(return_value=None)),
     ):
         first = client.post("/api/ingest", json={"url": _RECIPE_URL})
         assert first.status_code == 200, first.text
@@ -232,9 +232,9 @@ def test_ingest_llm_fallback_called_when_no_jsonld(test_client_with_db):
     llm_url = "https://recipes.example.com/plain-page"
 
     with (
-        patch("forkit.api.ingest.safe_fetch", new=AsyncMock(return_value=plain_html)),
-        patch("forkit.api.ingest.RoutedLLMProvider.extract_recipe", new=AsyncMock(return_value=llm_result)),
-        patch("forkit.api.ingest.fetch_and_store_image", new=AsyncMock(return_value=None)),
+        patch("forkit.services.ingest.safe_fetch", new=AsyncMock(return_value=plain_html)),
+        patch("forkit.services.ingest.RoutedLLMProvider.extract_recipe", new=AsyncMock(return_value=llm_result)),
+        patch("forkit.services.ingest.fetch_and_store_image", new=AsyncMock(return_value=None)),
     ):
         resp = client.post("/api/ingest", json={"url": llm_url})
 

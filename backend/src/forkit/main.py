@@ -15,6 +15,7 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
+from .api.discovery_search import router as discovery_search_router
 from .api.ingest import router as ingest_router
 from .api.recipes import router as recipes_router
 from .api.suggestions import router as suggestions_router
@@ -72,6 +73,7 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # ty
 app.include_router(ingest_router, prefix="/api")
 app.include_router(recipes_router, prefix="/api")
 app.include_router(suggestions_router, prefix="/api")
+app.include_router(discovery_search_router, prefix="/api")
 
 
 @app.get("/healthz")
