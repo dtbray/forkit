@@ -1,7 +1,18 @@
 # syntax=docker/dockerfile:1
-# Multi-stage build — security gate S8: non-root user (forkit, UID 1000)
 
-# ── Stage 1: build dependencies ────────────────────────────────────────────────
+# ── Stage 1: build frontend ─────────────────────────────────────────────────────
+FROM node:22-slim AS frontend-builder
+
+WORKDIR /app
+
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
+
+COPY frontend/ ./
+RUN npm run build
+
+
+# ── Stage 2: build Python dependencies ─────────────────────────────────────────
 FROM python:3.12-slim AS builder
 
 WORKDIR /build
@@ -20,7 +31,7 @@ COPY backend/src ./src
 RUN pip install --no-cache-dir --prefix=/install .
 
 
-# ── Stage 2: runtime image ─────────────────────────────────────────────────────
+# ── Stage 3: runtime image ─────────────────────────────────────────────────────
 FROM python:3.12-slim AS runtime
 
 # S8 — non-root user
@@ -48,7 +59,7 @@ COPY alembic.ini ./
 COPY ops/ ./ops/
 
 # Copy frontend static build so FastAPI StaticFiles can serve the SPA
-COPY frontend/build ./src/forkit/static
+COPY --from=frontend-builder /app/build ./src/forkit/static
 
 # Ensure the data volume mount-point is owned by forkit before privilege drop
 RUN mkdir -p /data && chown forkit:forkit /data

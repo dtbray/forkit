@@ -8,14 +8,12 @@ dev:
 
 # ── Build ──────────────────────────────────────────────────────────────────────
 
-# Build frontend then Docker image
+# Build Docker image (frontend built inside Docker)
 build:
-	cd frontend && npm run build
 	docker compose build
 
 # Rebuild from scratch (no cache)
 rebuild:
-	cd frontend && npm run build
 	docker compose build --no-cache
 
 # ── Lifecycle ──────────────────────────────────────────────────────────────────
@@ -37,7 +35,6 @@ down:
 # Stop, rebuild image, start
 restart:
 	docker compose down
-	cd frontend && npm run build
 	docker compose build
 	docker compose up -d
 	@echo ""

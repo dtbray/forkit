@@ -1,0 +1,21 @@
+.git
+.env
+.env.*
+
+# Frontend — node_modules and build cache excluded; Docker builds them
+frontend/node_modules/
+frontend/.svelte-kit/
+frontend/build/
+frontend/test-results/
+
+# Backend — test files not needed in the image
+backend/tests/
+
+# Python bytecode
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+
+# Harness / local tooling
+clients/
+.claude/
