@@ -15,9 +15,11 @@ import re
 import uuid
 from datetime import datetime, timezone
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 
+import feedparser
 import structlog
+from bs4 import BeautifulSoup
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from slowapi import Limiter
@@ -31,7 +33,7 @@ from ..discovery.registry import get_adapter
 from ..discovery.schemas import RecipeStub, SearchRequest, SearchResponse
 from ..discovery.service import federated_search
 from ..models.discovery_site import DiscoverySite
-from ..parser.fetcher import URLForbiddenError, _resolve_and_check  # noqa: PLC2701
+from ..parser.fetcher import FetchError, URLForbiddenError, _resolve_and_check, safe_fetch  # noqa: PLC2701
 
 log = structlog.get_logger()
 
@@ -62,6 +64,8 @@ def _validate_url(url: str, field_name: str = "url") -> str:
         _resolve_and_check(parsed.hostname or "")
     except URLForbiddenError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except FetchError as exc:
+        raise HTTPException(status_code=422, detail=f"Could not resolve host: {exc}") from exc
     return url
 
 
@@ -136,6 +140,148 @@ def list_sites(
     """List all configured discovery sites (adapter config redacted — S6)."""
     sites = session.scalars(select(DiscoverySite)).all()
     return [_site_to_dict(s) for s in sites]
+
+
+class DetectRequest(BaseModel):
+    url: str
+
+
+class DetectResponse(BaseModel):
+    input_url: str
+    site_name: str
+    is_feed: bool
+    detected_feeds: list[str]
+    suggested_search_url_template: str | None
+    confidence: str  # "high" | "partial" | "none"
+
+
+# ---------------------------------------------------------------------------
+# POST /discovery/sites/detect
+# ---------------------------------------------------------------------------
+
+
+@router.post("/sites/detect", response_model=DetectResponse)
+@limiter.limit("10/minute")
+async def detect_site(
+    request: Request,
+    body: DetectRequest,
+) -> DetectResponse:
+    """Sniff a URL for RSS feeds and search patterns.
+
+    Returns structured pre-fill data for the Add Site form.
+    Rate-limited: 10/min/IP (security condition S8).
+    """
+    # 1. Validate URL (SSRF protection — S3)
+    _validate_url(body.url, "url")
+
+    # 2. Fetch the URL
+    try:
+        content_bytes = await safe_fetch(body.url)
+    except URLForbiddenError:
+        raise HTTPException(
+            status_code=422,
+            detail="URL is not allowed (SSRF protection)",
+        )
+    except FetchError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Could not fetch URL: {exc}",
+        )
+    except Exception:
+        raise HTTPException(
+            status_code=422,
+            detail="Failed to analyze URL",
+        )
+
+    # 3. Parse HTML (best-effort)
+    try:
+        soup = BeautifulSoup(content_bytes, "html.parser")
+    except Exception:
+        soup = None
+
+    # 4. Feed detection — is the URL itself a feed?
+    is_feed = False
+    try:
+        parsed_feed = feedparser.parse(content_bytes)
+        if parsed_feed.get("version") and parsed_feed.get("entries"):
+            is_feed = True
+    except Exception:
+        pass
+
+    # 5. RSS link tags
+    detected_feeds: list[str] = []
+    if soup is not None:
+        for link_tag in soup.find_all("link", rel="alternate"):
+            tag_type = link_tag.get("type", "")
+            if tag_type in ("application/rss+xml", "application/atom+xml"):
+                href = link_tag.get("href", "").strip()
+                if not href:
+                    continue
+                resolved = urljoin(body.url, href)
+                try:
+                    _validate_url(resolved, "feed_href")
+                except HTTPException:
+                    continue
+                detected_feeds.append(resolved)
+
+    # 6. Site name
+    site_name = ""
+    if soup is not None:
+        title_tag = soup.find("title")
+        if title_tag:
+            site_name = title_tag.get_text(strip=True)
+
+    # 7. Search URL template (best-effort)
+    suggested_search_url_template: str | None = None
+    if soup is not None:
+        for form in soup.find_all("form"):
+            # Narrow to text/search inputs manually for bs4 compatibility
+            input_tag = None
+            for inp in form.find_all("input"):
+                inp_type = (inp.get("type") or "text").lower()
+                if inp_type in ("text", "search"):
+                    input_tag = inp
+                    break
+            if input_tag is None:
+                continue
+            param_name = input_tag.get("name", "").strip()
+            if not param_name:
+                continue
+            action = (form.get("action") or "").strip()
+            if not action:
+                action = body.url
+            resolved_action = urljoin(body.url, action)
+            try:
+                _validate_url(resolved_action, "form_action")
+            except HTTPException:
+                continue
+            suggested_search_url_template = f"{resolved_action}?{param_name}={{query}}"
+            break
+
+    # 8. Confidence
+    if is_feed or detected_feeds:
+        confidence = "high"
+    elif suggested_search_url_template:
+        confidence = "partial"
+    else:
+        confidence = "none"
+
+    log.info(
+        "detect site",
+        url=body.url,
+        is_feed=is_feed,
+        feeds_found=len(detected_feeds),
+        confidence=confidence,
+    )
+
+    return DetectResponse(
+        input_url=body.url,
+        site_name=site_name,
+        is_feed=is_feed,
+        detected_feeds=detected_feeds,
+        suggested_search_url_template=suggested_search_url_template,
+        confidence=confidence,
+    )
 
 
 class SiteCreateRequest(BaseModel):
