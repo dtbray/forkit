@@ -20,8 +20,12 @@
 	// Derived site initial for thumbnail fallback
 	let siteInitial = $derived(stub.source_site.name.charAt(0).toUpperCase());
 
+	// internal:// URLs must never be rendered as navigable anchors (security condition Q3.3)
+	let isInternalUrl = $derived(stub.url.startsWith('internal://'));
+
 	// Derive a clean display domain
 	let displayDomain = $derived(() => {
+		if (isInternalUrl) return 'Local Collection';
 		try {
 			return new URL(stub.url).hostname.replace(/^www\./, '');
 		} catch {
@@ -100,16 +104,22 @@
 	<!-- Content -->
 	<div class="stub-content">
 		<div class="stub-header">
-			<!-- Title — external link, opens in new tab -->
-			<a
-				href={stub.url}
-				class="stub-title"
-				target="_blank"
-				rel="noopener noreferrer"
-				aria-label="{stub.title} — opens {displayDomain()} in new tab"
-			>
-				{stub.title}
-			</a>
+			<!-- Title — external link for http(s); plain text for internal:// (Q3.3) -->
+			{#if isInternalUrl}
+				<span class="stub-title stub-title--local" aria-label="{stub.title} — from Local Collection">
+					{stub.title}
+				</span>
+			{:else}
+				<a
+					href={stub.url}
+					class="stub-title"
+					target="_blank"
+					rel="noopener noreferrer"
+					aria-label="{stub.title} — opens {displayDomain()} in new tab"
+				>
+					{stub.title}
+				</a>
+			{/if}
 
 			<!-- Site + domain badge -->
 			<div class="stub-meta" aria-label="Source: {stub.source_site.name}">
@@ -264,6 +274,16 @@
 		text-decoration: underline;
 		text-underline-offset: 2px;
 		color: var(--color-clay);
+	}
+
+	.stub-title--local {
+		cursor: default;
+		color: var(--color-ink);
+	}
+
+	.stub-title--local:hover {
+		text-decoration: none;
+		color: var(--color-ink);
 	}
 
 	.stub-title:focus-visible {
