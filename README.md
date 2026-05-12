@@ -21,59 +21,58 @@ Forkit is a self-hosted recipe accumulator that lets you collect recipes from an
 
 ## Architecture
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│  SvelteKit 5 Frontend (SPA)                                 │
-│  • Recipe browser and search                                │
-│  • Library management (tags, ratings, cook history)         │
-│  • Discovery search across multiple sites                   │
-│  • Settings & site management                              │
-└──────────────────────────┬──────────────────────────────────┘
-                           │
-                    HTTP/REST API
-                           │
-┌──────────────────────────▼──────────────────────────────────┐
-│  FastAPI Backend (Python 3.12)                              │
-│                                                              │
-│  ┌─────────────────────────────────────────────────────┐    │
-│  │ Core Endpoints                                      │    │
-│  │ • GET  /api/recipes — list & detail recipes        │    │
-│  │ • POST /api/ingest — add recipe from URL            │    │
-│  │ • GET  /api/search/discovery — search across sites  │    │
-│  │ • GET  /api/sites, POST /api/sites/{id}/test        │    │
-│  │ • GET  /api/feed/items, POST /api/feed/poll         │    │
-│  └─────────────────────────────────────────────────────┘    │
-│                                                              │
-│  ┌─────────────────────────────────────────────────────┐    │
-│  │ Discovery Layer                                     │    │
-│  │ • HTML scraper (recipe-scrapers library)            │    │
-│  │ • RSS feed parser (feedparser)                      │    │
-│  │ • Google CSE adapter (custom search integration)    │    │
-│  │ • Food.com dataset adapter (local FTS5 search)      │    │
-│  │ • Site registry & adapter factory                   │    │
-│  └─────────────────────────────────────────────────────┘    │
-│                                                              │
-│  ┌─────────────────────────────────────────────────────┐    │
-│  │ Recipe Parser                                       │    │
-│  │ • URL fetcher (httpx with rate limiting)            │    │
-│  │ • structured-data extractor (json-ld, microdata)    │    │
-│  │ • Fallback HTML scraper                             │    │
-│  │ • Image saver                                       │    │
-│  └─────────────────────────────────────────────────────┘    │
-└──────────────────────────┬──────────────────────────────────┘
-                           │
-        ┌──────────────────┼──────────────────┐
-        │                  │                  │
-   SQLite 3.x        SQLite 3.x          File Storage
-   (Main DB)        (FTS5 Dataset)       (Hero images)
-   • Recipes        • 230K+ Food.com
-   • Ingredients    • Recipes indexed
-   • Tags           • for full-text
-   • Cook history   • search
-   • Discovery
-     sites
-   • Feed items
+```mermaid
+graph TD
+    FE["<b>SvelteKit 5 Frontend</b><br/>Recipe browser · Library · Discovery · Settings"]
+    BE["<b>FastAPI Backend</b><br/>Python 3.12 · async · rate-limited"]
+    PARSER["<b>Recipe Parser</b><br/>recipe-scrapers · JSON-LD · HTML fallback"]
+    DISC["<b>Discovery Service</b><br/>Adapter registry · federated search"]
+    A1["html_scrape"]
+    A2["feed"]
+    A3["google_cse"]
+    A4["dataset"]
+    MAIN[("SQLite<br/><i>forkit.db</i><br/>recipes · feeds · sites")]
+    FTS[("SQLite FTS5<br/><i>forkit_dataset.db</i><br/>230K+ community recipes")]
+    FS[("File Storage<br/><i>/data/images</i><br/>hero images")]
 
+    FE -->|HTTP REST| BE
+    BE --> PARSER
+    BE --> DISC
+    DISC --> A1 & A2 & A3 & A4
+    A4 --> FTS
+    PARSER --> MAIN
+    PARSER --> FS
+    BE --> MAIN
+```
+
+### Recipe Ingestion Flow
+
+```mermaid
+flowchart TD
+    U([User pastes URL]) --> FETCH[Fetch page]
+    FETCH --> RS{recipe-scrapers\nmatch?}
+    RS -->|Yes| EXT[Structured extraction]
+    RS -->|No| JL{JSON-LD /\nmicrodata?}
+    JL -->|Yes| EXT
+    JL -->|No| HTML[HTML fallback parser]
+    HTML --> EXT
+    EXT --> SAVE[(SQLite — forkit.db)]
+    EXT --> IMG[Download hero image]
+    IMG --> FS[(File storage)]
+```
+
+### Discovery Flow
+
+```mermaid
+flowchart LR
+    Q([Search query]) --> REG[Adapter Registry]
+    REG --> S1[html_scrape\nadapter]
+    REG --> S2[feed\nadapter]
+    REG --> S3[google_cse\nadapter]
+    REG --> S4[dataset\nadapter]
+    S1 & S2 & S3 & S4 --> MERGE[Merge results]
+    MERGE --> OUT([RecipeStub list])
+    S4 -. queries .-> FTS[(FTS5\nforkit_dataset.db)]
 ```
 
 ### Frontend (SvelteKit)
