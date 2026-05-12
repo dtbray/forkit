@@ -29,7 +29,7 @@ from sqlalchemy.orm import Session
 
 from ..db import get_session
 from ..discovery.adapters.google_cse import validate_config_has_no_key_values
-from ..discovery.registry import get_adapter
+from ..discovery.registry import ALLOWED_ADAPTER_KINDS, get_adapter
 from ..discovery.schemas import RecipeStub, SearchRequest, SearchResponse
 from ..discovery.service import federated_search
 from ..models.discovery_site import DiscoverySite
@@ -311,11 +311,13 @@ def create_site(
     # S3 — validate home_url
     _validate_url(body.home_url, "home_url")
 
-    # Validate adapter_kind is known
-    if body.adapter_kind not in ("html_scrape", "google_cse", "feed_only"):
+    # Validate adapter_kind is known (ADR-003 adds "dataset" — singleton, not
+    # site-bound, but accepted at this endpoint so dataset-shaped sites can be
+    # listed in the UI alongside scraping sites).
+    if body.adapter_kind not in ALLOWED_ADAPTER_KINDS:
         raise HTTPException(
             status_code=422,
-            detail=f"adapter_kind must be one of: html_scrape, google_cse, feed_only",
+            detail=f"adapter_kind must be one of: {', '.join(ALLOWED_ADAPTER_KINDS)}",
         )
 
     config = body.adapter_config_json or {}
