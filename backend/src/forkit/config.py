@@ -14,6 +14,10 @@ class Settings(BaseSettings):
     forkit_anthropic_model: str = "claude-sonnet-4-6"
     forkit_llm_timeout_sec: int = 30
     forkit_log_level: str = "INFO"
+    # Discovery / Phase 1
+    forkit_discovery_search_timeout_sec: int = 5
+    forkit_discovery_cache_ttl_min: int = 30
+    forkit_google_cse_api_key: str = ""  # empty = google_cse adapter is inert
 
     model_config = {
         "env_file": ".env",

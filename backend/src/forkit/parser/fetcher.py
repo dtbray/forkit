@@ -149,7 +149,12 @@ async def safe_fetch(
                 hops += 1
                 continue
 
-            # Not a redirect — stream body with size cap.
+            # Not a redirect — check HTTP status, then stream body with size cap.
+            if response.status_code >= 400:
+                raise FetchError(
+                    f"HTTP {response.status_code} from {current_url!r}"
+                )
+
             chunks: list[bytes] = []
             total = 0
             async for chunk in response.aiter_bytes(chunk_size=65536):

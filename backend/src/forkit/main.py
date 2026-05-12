@@ -8,6 +8,7 @@ from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
 import structlog
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -15,13 +16,22 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
+from .api.discovery_search import router as discovery_search_router
+from .api.feed import router as feed_router
 from .api.ingest import router as ingest_router
 from .api.recipes import router as recipes_router
 from .api.suggestions import router as suggestions_router
 from .config import get_settings
+from .db import SessionLocal
+from .discovery.poller import poll_all_feeds
 from .logging import configure_logging
 
 log = structlog.get_logger()
+
+
+async def poll_all_feeds_job() -> None:
+    """APScheduler job wrapper — calls poll_all_feeds with SessionLocal."""
+    await poll_all_feeds(SessionLocal)
 
 
 @asynccontextmanager
@@ -60,7 +70,30 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         image_dir=str(settings.forkit_image_dir),
         llm_primary=settings.forkit_llm_primary,
     )
-    yield
+
+    # Feed poller scheduler — disabled in tests via FORKIT_DISABLE_SCHEDULER
+    scheduler = AsyncIOScheduler(timezone="UTC")
+    scheduler.add_job(
+        poll_all_feeds_job,
+        "interval",
+        minutes=60,
+        id="feed_poll",
+        max_instances=1,
+        coalesce=True,
+        replace_existing=True,
+    )
+    if not os.getenv("FORKIT_DISABLE_SCHEDULER"):
+        scheduler.start()
+        log.info("forkit: feed poll scheduler started (60 min interval)")
+    else:
+        log.info("forkit: feed poll scheduler disabled (FORKIT_DISABLE_SCHEDULER set)")
+
+    try:
+        yield
+    finally:
+        if scheduler.running:
+            scheduler.shutdown(wait=False)
+            log.info("forkit: feed poll scheduler stopped")
 
 
 limiter = Limiter(key_func=get_remote_address)
@@ -72,6 +105,8 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # ty
 app.include_router(ingest_router, prefix="/api")
 app.include_router(recipes_router, prefix="/api")
 app.include_router(suggestions_router, prefix="/api")
+app.include_router(discovery_search_router, prefix="/api")
+app.include_router(feed_router, prefix="/api")
 
 
 @app.get("/healthz")
