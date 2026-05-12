@@ -29,6 +29,9 @@ dependencies = [
     "defusedxml>=0.7",
 ]
 
+[project.scripts]
+forkit = "forkit.cli:main"
+
 [project.optional-dependencies]
 dev = [
     "pytest",
