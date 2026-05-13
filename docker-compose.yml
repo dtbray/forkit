@@ -4,8 +4,8 @@ services:
       context: .
       dockerfile: backend/Dockerfile
     restart: unless-stopped
-    ports:
-      - "${PORT:-8080}:8000"
+    expose:
+      - "8000"
     environment:
       - FORKIT_DB_PATH=/data/forkit.db
       - FORKIT_IMAGE_DIR=/data/images
