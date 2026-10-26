@@ -11,6 +11,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Backend tests
+        run: |
+          python3 -m venv /tmp/forkit-tests
+          /tmp/forkit-tests/bin/pip install './backend[dev]'
+          /tmp/forkit-tests/bin/pytest backend/tests -q
       - name: Build and publish
         env:
           GH_TOKEN: ${{ github.token }}

@@ -52,7 +52,13 @@ class URLForbiddenError(SSRFBlockedError):
 
 
 class FetchError(Exception):
-    """Raised on network errors, size cap exceeded, or too many redirects."""
+    """Fetch failure, optionally carrying HTTP backoff information."""
+
+    def __init__(self, message: str, *, status_code: int | None = None,
+                 retry_after: str | None = None) -> None:
+        super().__init__(message)
+        self.status_code = status_code
+        self.retry_after = retry_after
 
 
 def _resolve_and_check(host: str) -> None:
@@ -82,6 +88,8 @@ async def safe_fetch(
     *,
     max_redirects: int = _MAX_REDIRECTS,
     max_bytes: int = _DEFAULT_MAX_BYTES,
+    user_agent: str = _USER_AGENT,
+    response_headers: dict[str, str] | None = None,
 ) -> bytes:
     """Fetch *url* with full SSRF protection. Returns response body bytes.
 
@@ -120,7 +128,7 @@ async def safe_fetch(
         while hops <= max_redirects:
             response = await client.get(
                 current_url,
-                headers={"User-Agent": _USER_AGENT},
+                headers={"User-Agent": user_agent},
             )
 
             if response.is_redirect:
@@ -152,8 +160,13 @@ async def safe_fetch(
             # Not a redirect — check HTTP status, then stream body with size cap.
             if response.status_code >= 400:
                 raise FetchError(
-                    f"HTTP {response.status_code} from {current_url!r}"
+                    f"HTTP {response.status_code} from {current_url!r}",
+                    status_code=response.status_code,
+                    retry_after=response.headers.get("retry-after"),
                 )
+
+            if response_headers is not None:
+                response_headers.update(response.headers)
 
             chunks: list[bytes] = []
             total = 0

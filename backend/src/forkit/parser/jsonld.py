@@ -52,8 +52,10 @@ def _extract_instruction_text(step: Any) -> str | None:
         step_type = step.get("@type", "")
         if isinstance(step_type, str) and "HowToSection" in step_type:
             # Recurse into itemListElement
-            items = _coerce_to_list(step.get("itemListElement", []))
-            return " ".join(items) or None
+            items = step.get("itemListElement", [])
+            if not isinstance(items, list):
+                items = [items]
+            return "\n".join(filter(None, (_extract_instruction_text(item) for item in items))) or None
         return (
             step.get("text")
             or step.get("name")
@@ -197,7 +199,7 @@ def _try_recipe_scrapers(html: str, url: str) -> dict[str, Any] | None:
         return None
 
 
-def extract_jsonld(html: str, url: str) -> dict[str, Any] | None:
+def extract_jsonld(html: str, url: str, *, schema_only: bool = False) -> dict[str, Any] | None:
     """Extract a recipe dict from HTML.
 
     Tries extruct first, falls back to recipe-scrapers.
@@ -207,4 +209,4 @@ def extract_jsonld(html: str, url: str) -> dict[str, Any] | None:
     if result is not None:
         return result
 
-    return _try_recipe_scrapers(html, url)
+    return None if schema_only else _try_recipe_scrapers(html, url)

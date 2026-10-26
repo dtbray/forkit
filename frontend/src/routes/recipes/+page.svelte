@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import ImportProgress from '$lib/components/ImportProgress.svelte';
 	import { page } from '$app/stores';
 	import { formatDuration } from '$lib/utils/duration';
 
@@ -17,6 +18,9 @@
 
 	interface PageData {
 		recipes: Recipe[];
+		total?: number;
+		limit?: number;
+		offset?: number;
 	}
 
 	let { data }: { data: PageData } = $props();
@@ -56,7 +60,11 @@
 		applyFilters();
 	}
 
-
+	function changePage(offset: number) {
+		const params = new URLSearchParams($page.url.searchParams);
+		params.set('offset', String(offset));
+		goto(`/recipes?${params}`);
+	}
 </script>
 
 <svelte:head>
@@ -72,6 +80,8 @@
 			<span aria-hidden="true">+</span> Add recipe
 		</a>
 	</header>
+
+	<ImportProgress />
 
 	<!-- ── Filter bar ───────────────────────────────────────────────────────────── -->
 	<div class="filter-bar" role="search" aria-label="Filter recipes">
@@ -191,9 +201,18 @@
 			{/if}
 		</div>
 	{/if}
+	{#if (data.total ?? 0) > (data.limit ?? 50)}
+		<nav class="pagination" aria-label="Recipe pages">
+			<button disabled={(data.offset ?? 0) === 0} onclick={() => changePage(Math.max(0, (data.offset ?? 0) - (data.limit ?? 50)))}>Previous</button>
+			<span>{(data.offset ?? 0) + 1}–{Math.min((data.offset ?? 0) + data.recipes.length, data.total ?? 0)} of {data.total}</span>
+			<button disabled={(data.offset ?? 0) + (data.limit ?? 50) >= (data.total ?? 0)} onclick={() => changePage((data.offset ?? 0) + (data.limit ?? 50))}>Next</button>
+		</nav>
+	{/if}
 </main>
 
 <style>
+	.pagination { display: flex; justify-content: center; align-items: center; gap: 1rem; margin: 2rem 0; }
+	.pagination button { padding: .75rem 1rem; }
 	/* ── Page root ───────────────────────────────────────────────────────────── */
 	.recipes-page {
 		flex: 1;

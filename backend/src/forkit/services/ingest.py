@@ -72,7 +72,10 @@ def _get_llm_provider(session: Session) -> RoutedLLMProvider:
     return RoutedLLMProvider(primary=primary, fallback=fallback, session=session)
 
 
-async def ingest_url(url: str, session: Session) -> dict:
+async def ingest_url(
+    url: str, session: Session, *, html_bytes: bytes | None = None,
+    structured_only: bool = False, download_images: bool = True,
+) -> dict:
     """Fetch, parse, and persist a recipe URL. Returns dict with recipe_id,
     parser_source, parser_confidence.
 
@@ -96,7 +99,8 @@ async def ingest_url(url: str, session: Session) -> dict:
 
     # --- Step 1: Fetch -----------------------------------------------------
     try:
-        html_bytes = await safe_fetch(url)
+        if html_bytes is None:
+            html_bytes = await safe_fetch(url)
     except URLForbiddenError as exc:
         log.warning("ingest blocked url", url=url, reason=str(exc))
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -107,9 +111,13 @@ async def ingest_url(url: str, session: Session) -> dict:
     html = html_bytes.decode("utf-8", errors="replace")
 
     # --- Step 2: JSON-LD extraction → LLM fallback -------------------------
-    raw = extract_jsonld(html, url)
+    raw = (extract_jsonld(html, url, schema_only=True) if structured_only
+           else extract_jsonld(html, url))
     parser_source = "jsonld"
     parser_confidence = 1.0
+
+    if structured_only and (not raw or not raw.get("ingredients") or not raw.get("instructions")):
+        raise HTTPException(status_code=422, detail="No complete structured recipe found")
 
     if raw is None:
         log.info("ingest: JSON-LD not found, trying LLM fallback", url=url)
@@ -217,7 +225,7 @@ async def ingest_url(url: str, session: Session) -> dict:
     # --- Step 6: Image fetch (non-fatal) -----------------------------------
     settings = get_settings()
     image_url = normalized.get("image_url")
-    if image_url:
+    if image_url and download_images:
         image_path = await fetch_and_store_image(image_url, settings.forkit_image_dir)
         if image_path:
             try:
