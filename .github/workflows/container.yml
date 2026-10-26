@@ -1,0 +1,21 @@
+name: Publish lab image
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+  packages: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Build and publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          echo "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          image="ghcr.io/dtbray/forkit:sha-$GITHUB_SHA"
+          docker build --label "org.opencontainers.image.source=https://github.com/dtbray/forkit" --label "org.opencontainers.image.revision=$GITHUB_SHA" -f backend/Dockerfile -t "$image" .
+          docker push "$image"
