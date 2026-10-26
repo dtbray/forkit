@@ -155,7 +155,7 @@
 					{:else}
 						<p class="hint">Connect your ChatGPT account once to recognize ingredients in photos.</p>
 						<button onclick={() => showSetup = !showSetup}>Connect ChatGPT</button>
-						{#if showSetup}<div class="notice"><p>On a computer, use Forkit’s connection helper to Continue with ChatGPT, then securely install the connection on your lab server. This is a one-time household setup.</p><p>After connecting, <button onclick={checkConnection}>Check connection</button>.</p></div>{/if}
+						{#if showSetup}<div class="notice"><p>On a computer, use Forkit’s connection helper to Continue with ChatGPT, then securely install the connection on your lab server. This is a one-time household setup. <a href="https://github.com/dtbray/forkit/blob/feat/pantry-ingest/docs/PANTRY.md" target="_blank" rel="noreferrer">Setup instructions</a></p><p>After connecting, <button onclick={checkConnection}>Check connection</button>.</p></div>{/if}
 					{/if}
 				</div>
 			{:else}

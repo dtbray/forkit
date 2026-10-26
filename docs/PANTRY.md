@@ -38,7 +38,7 @@ On the computer running your browser, check out this fork and run:
 
 ```sh
 uv run --with 'PyJWT[crypto]>=2.10,<3' --with 'httpx>=0.27,<1' \
-  backend/src/forkit/chatgpt.py
+  backend/src/forkit/chatgpt.py --install-host ansible@192.168.1.153
 ```
 
 The helper starts the loopback listener before opening **Continue with ChatGPT**.
@@ -52,7 +52,14 @@ issued client ID and verified subject. No tokens appear in the browser app,
 console logs, source control or URL query parameters. The authorization URL
 contains one-time state/nonce/challenge, not access or refresh tokens.
 
-Transfer only that protected credential file to the lab over SSH, then install
+The optional `--install-host` uses your existing `~/.ssh/homelab_ed25519` key
+and pinned SSH host trust to install the connection automatically after consent.
+It sends credentials only on encrypted SSH stdin, preserves/creates the VM's own
+host ID, and sets UID/GID 1000 and private file/directory modes. It targets only
+the existing `forkit` Incus guest. Omit the option for a local-only connection;
+use `--identity` for another already-authorized SSH key. It requests no new access.
+
+For manual transfer, copy only that protected credential file over SSH, then install
 inside the `forkit` guest as UID/GID 1000 at:
 
 ```text

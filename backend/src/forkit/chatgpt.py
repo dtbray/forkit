@@ -13,7 +13,9 @@ import hashlib
 import json
 import os
 import secrets
+import shlex
 import stat
+import subprocess
 import tempfile
 import time
 import uuid
@@ -245,16 +247,80 @@ def login(path: Path, port: int = 1455) -> None:
     print("ChatGPT connected. Protected credentials saved; no API key is needed.")
 
 
+def install_on_lab(path: Path, host: str, identity: Path) -> None:
+    """Explicit helper option: transfer via existing SSH, never through browser storage."""
+    if (
+        not host
+        or host.startswith("-")
+        or any(
+            c not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.@:-"
+            for c in host
+        )
+    ):
+        raise ConnectionError("Invalid SSH host")
+    value = read_credentials(path)
+    installer = (
+        "import json,os,pathlib,sys,uuid; "
+        "p=pathlib.Path('/opt/homelab/forkit/data/chatgpt'); "
+        "p.mkdir(mode=0o700,parents=True,exist_ok=True); os.chmod(p,0o700); os.chown(p,1000,1000); "
+        "h=p/'host-id'; "
+        "host=json.loads(h.read_text()) if h.exists() else {'id':'urn:uuid:'+str(uuid.uuid4())}; "
+        "os.umask(0o077); h.write_text(json.dumps(host)); os.chown(h,1000,1000); "
+        "v=json.load(sys.stdin); v['ext_agent_host_id']=host['id']; "
+        "t=p/'credentials.json.partial'; t.write_text(json.dumps(v)); "
+        "os.chmod(t,0o600); os.chown(t,1000,1000); t.replace(p/'credentials.json')"
+    )
+    result = subprocess.run(
+        [
+            "ssh",
+            "-i",
+            str(identity.expanduser()),
+            "-o",
+            "BatchMode=yes",
+            "-o",
+            "StrictHostKeyChecking=yes",
+            "-o",
+            "ConnectTimeout=10",
+            host,
+            "sudo -n incus exec forkit -- python3 -c " + shlex.quote(installer),
+        ],
+        input=json.dumps(value),
+        text=True,
+        capture_output=True,
+        check=False,
+        timeout=60,
+    )
+    if result.returncode:
+        raise ConnectionError(
+            "SSH installation failed; keep the private file and follow setup instructions"
+        )
+    print("ChatGPT connection installed on the lab. Choose a photo model in Forkit Pantry.")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--credentials", type=Path, default=Path.home() / ".config/forkit/chatgpt.json"
     )
     parser.add_argument("--port", type=int, default=1455)
+    parser.add_argument(
+        "--install-host", help="Optional existing SSH host owning the lab's forkit Incus guest"
+    )
+    parser.add_argument("--identity", type=Path, default=Path.home() / ".ssh/homelab_ed25519")
     args = parser.parse_args()
     try:
         login(args.credentials.expanduser(), args.port)
-    except (ConnectionError, OSError, httpx.HTTPError, ValueError, KeyError, jwt.PyJWTError):
+        if args.install_host:
+            install_on_lab(args.credentials.expanduser(), args.install_host, args.identity)
+    except (
+        ConnectionError,
+        OSError,
+        subprocess.SubprocessError,
+        httpx.HTTPError,
+        ValueError,
+        KeyError,
+        jwt.PyJWTError,
+    ):
         print("Could not complete ChatGPT sign-in. Retry or check the connection setup guide.")
         return 1
     return 0

@@ -245,3 +245,18 @@ def test_identity_validation_and_rotating_credentials(tmp_path):
     path.chmod(0o644)
     with pytest.raises(chatgpt.ConnectionError):
         chatgpt.read_credentials(path)
+
+
+def test_lab_install_never_puts_tokens_in_ssh_arguments(tmp_path):
+    path = tmp_path / "credentials.json"
+    chatgpt.save_credentials(path, credentials())
+    with patch.object(chatgpt.subprocess, "run") as transfer:
+        transfer.return_value.returncode = 0
+        chatgpt.install_on_lab(path, "ansible@192.168.1.153", tmp_path / "key")
+        call = transfer.call_args
+        assert "test-access" not in " ".join(call.args[0])
+        assert json.loads(call.kwargs["input"])["access_token"] == "test-access"
+        assert "StrictHostKeyChecking=yes" in call.args[0]
+        with pytest.raises(chatgpt.ConnectionError):
+            chatgpt.install_on_lab(path, "-oProxyCommand=bad", tmp_path / "key")
+        assert transfer.call_count == 1
