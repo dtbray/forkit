@@ -2,6 +2,7 @@ from .base import Base
 from .discovery_site import DiscoverySite
 from .feed_item import FeedItem
 from .ingredient import Ingredient
+from .pantry import PantryItem
 from .recipe import DeletedRecipe, Recipe
 from .recipe_tag import recipe_tag
 from .search_cache import SearchCache
@@ -13,6 +14,7 @@ __all__ = [
     "DiscoverySite",
     "FeedItem",
     "Ingredient",
+    "PantryItem",
     "Recipe",
     "SearchCache",
     "Tag",

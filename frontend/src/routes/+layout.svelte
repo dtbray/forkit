@@ -95,6 +95,7 @@
 						<span>Add</span>
 					</a>
 				</li>
+                <li><a href="/pantry" class="nav-link" class:nav-link--active={currentPath.startsWith('/pantry')} aria-current={currentPath.startsWith('/pantry') ? 'page' : undefined}>Pantry</a></li>
 				<li><ThemeSelect /></li>
 			</ul>
 		</nav>
