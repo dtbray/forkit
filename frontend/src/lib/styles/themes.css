@@ -1,0 +1,46 @@
+/* Theme overrides for the household fork. Base design tokens remain in tokens.css. */
+:root { color-scheme: light; }
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --color-bone: #181715;
+  --color-bone-dim: #24221f;
+  --color-surface: #211f1c;
+  --color-ink: #f3eee5;
+  --color-ink-secondary: #cbc1b4;
+  --color-ink-tertiary: #ab9f90;
+  --color-clay: #e8a17e;
+  --color-clay-dark: #f4bd9d;
+  --color-clay-dim: #493027;
+  --color-divider: #51483d;
+  --color-overlay: rgba(0, 0, 0, .65);
+  --color-focus-ring: #f4bd9d;
+  --color-success: #8ac698;
+  --color-error: #ffaaa1;
+  --color-warning: #e5c273;
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, .3);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, .4);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, .5);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']):not([data-theme='dark']) {
+    color-scheme: dark;
+    --color-bone: #181715;
+    --color-bone-dim: #24221f;
+    --color-surface: #211f1c;
+    --color-ink: #f3eee5;
+    --color-ink-secondary: #cbc1b4;
+    --color-ink-tertiary: #ab9f90;
+    --color-clay: #e8a17e;
+    --color-clay-dark: #f4bd9d;
+    --color-clay-dim: #493027;
+    --color-divider: #51483d;
+    --color-overlay: rgba(0, 0, 0, .65);
+    --color-focus-ring: #f4bd9d;
+    --color-success: #8ac698;
+    --color-error: #ffaaa1;
+    --color-warning: #e5c273;
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, .3);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, .4);
+    --shadow-lg: 0 8px 24px rgba(0, 0, 0, .5);
+  }
+}

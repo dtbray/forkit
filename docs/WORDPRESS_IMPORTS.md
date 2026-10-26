@@ -24,6 +24,9 @@ Options:
 
 Changed source posts whose recipes are already saved are flagged as `changed` for review; they do not overwrite stored ingredients, notes or ratings. Automatic update application and automatic deletion when posts leave the category are intentionally not provided. A refresh polls the lightweight category API; subscribing to RSS is not required for this importer and RSS is not used for the initial backfill.
 
-The read-only `/api/imports` endpoint and Library progress panel show saved, pending, skipped, failed and changed counts. Pagination lets the Library browse beyond its first 50 recipes. To inspect recorded errors, query the source's `state.sqlite` items table. Pause safely by stopping the importer service; restart it to resume. Do not delete the state directory to retry a job.
+The read-only `/api/imports` endpoint and Library progress panel show saved, pending, skipped, failed and changed counts. The Library polls every three seconds while visible and refreshes recipe results when progress changes, preserving search filters and pagination. Requests do not overlap; hidden tabs pause polling, and failed requests retain the last counts with a reconnecting indicator. A Refresh now action remains available. Pagination lets the Library browse beyond its first 50 recipes. To inspect recorded errors, query the source's `state.sqlite` items table. Pause safely by stopping the importer service; restart it to resume. Do not delete the state directory to retry a job.
 
 The lab deployment is declared in homelab `ops/forkit/compose.yml`. Its worker shares only the application's persistent data and has a separate CPU/memory budget. Back up both the recipe database and `/data/imports` to preserve recipe content, provenance and resumability together.
+
+
+The navigation's Color theme selector offers System, Light and Dark. System follows the OS color preference automatically; manual choices persist in local storage. The saved theme is applied before styles paint to avoid a light flash, and CSS overrides cover cards, forms, recipe details and cooking views. Storage restrictions do not prevent changing the current theme.

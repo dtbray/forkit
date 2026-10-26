@@ -3,6 +3,8 @@
 	import '@fontsource-variable/source-serif-4';
 	import '$lib/styles/tokens.css';
 	import '$lib/styles/breakpoints.css';
+	import '$lib/styles/themes.css';
+	import ThemeSelect from '$lib/components/ThemeSelect.svelte';
 	import { page } from '$app/stores';
 
 	let { children } = $props();
@@ -44,6 +46,7 @@
 				<li>
 					<a
 						href="/recipes"
+						aria-label="Library"
 						class="nav-link"
 						class:nav-link--active={currentPath.startsWith('/recipes')}
 						aria-current={currentPath.startsWith('/recipes') ? 'page' : undefined}
@@ -58,6 +61,7 @@
 				<li>
 					<a
 						href="/discover"
+						aria-label="Discover"
 						class="nav-link"
 						class:nav-link--active={currentPath.startsWith('/discover')}
 						aria-current={currentPath.startsWith('/discover') ? 'page' : undefined}
@@ -91,6 +95,7 @@
 						<span>Add</span>
 					</a>
 				</li>
+				<li><ThemeSelect /></li>
 			</ul>
 		</nav>
 	{/if}
@@ -217,7 +222,8 @@
 	}
 
 	/* Hide text labels at narrow width; icons remain */
-	@media (max-width: 359px) {
+	@media (max-width: 480px) {
+		.app-nav { padding: 0 var(--space-3); }
 		.nav-link span { display: none; }
 		.nav-link { padding: 0 var(--space-2); }
 	}

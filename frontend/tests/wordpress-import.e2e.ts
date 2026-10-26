@@ -24,3 +24,66 @@ test('library shows import progress and pages through all recipes', async ({ pag
 	const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
 	expect(overflow).toBe(false);
 });
+
+test('import updates refresh recipes without resetting filters or pagination', async ({ page }) => {
+	let imported = 1;
+	await page.route(/\/api\/recipes(\?.*)?$/, route => route.fulfill({ json: {
+		recipes: [{ id: 'live-recipe', title: `Live lentils ${imported}`, hero_image_path: null, cuisine: null, total_time: 'PT20M', cook_count: 0 }],
+		total: 100, limit: 50, offset: 50
+	} }));
+	await page.route('**/api/imports', route => route.fulfill({ json: { sources: [{
+		source_url: 'https://www.budgetbytes.com/category/recipes/vegetarian/vegan/', name: 'Vegan Recipes', stage: 'importing', total: 10, counts: { imported, pending: 10 - imported }, error: null
+	}] } }));
+	await page.goto('/recipes?q=lentil&offset=50');
+	await expect(page.getByRole('heading', { name: 'Live lentils 1' })).toBeVisible();
+	await expect(page.getByLabel('Recipe imports')).toContainText('1 of 10 recipes saved');
+	imported = 2;
+	await expect(page.getByLabel('Recipe imports')).toContainText('2 of 10 recipes saved', { timeout: 10000 });
+	await expect(page.getByRole('heading', { name: 'Live lentils 2' })).toBeVisible();
+	await expect(page).toHaveURL(/q=lentil&offset=50/);
+	await expect(page.getByLabel('Search recipes by keyword')).toHaveValue('lentil');
+	await expect(page.getByRole('progressbar', { name: 'Vegan Recipes import progress' })).toHaveAttribute('value', '2');
+});
+
+test('dark mode follows system and remembers an explicit choice', async ({ page }, info) => {
+	await page.emulateMedia({ colorScheme: 'dark' });
+	await page.route(/\/api\/recipes(\?.*)?$/, route => route.fulfill({ json: { recipes: [{ id: 'dark-lentils', title: 'Cozy lentil soup', hero_image_path: null, cuisine: null, total_time: 'PT30M', cook_count: 0 }], total: 1, limit: 50, offset: 0 } }));
+	await page.route('**/api/imports', route => route.fulfill({ json: { sources: [{ source_url: 'https://www.budgetbytes.com/category/recipes/vegetarian/vegan/', name: 'Vegan Recipes', stage: 'importing', total: 297, counts: { imported: 92, existing: 12, pending: 193 }, error: null }] } }));
+	await page.goto('/recipes');
+	const theme = page.getByRole('combobox', { name: 'Color theme' });
+	await expect(theme).toHaveValue('system');
+	await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(24, 23, 21)');
+	await page.getByLabel('Recipe imports').waitFor();
+	await page.screenshot({ path: info.outputPath('dark-library.png') });
+	await theme.selectOption('light');
+	await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(248, 244, 236)');
+	await page.reload();
+	await expect(theme).toHaveValue('light');
+	await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(248, 244, 236)');
+	await theme.selectOption('system');
+	await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(24, 23, 21)');
+	await page.emulateMedia({ colorScheme: 'light' });
+	await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(248, 244, 236)');
+	await theme.selectOption('dark');
+	await page.reload();
+	await expect(theme).toHaveValue('dark');
+	await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(24, 23, 21)');
+	expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
+});
+
+test('failed progress requests preserve the last counts and reconnect', async ({ page }) => {
+	let unavailable = false;
+	let saved = 1;
+	await page.route(/\/api\/recipes(\?.*)?$/, route => route.fulfill({ json: { recipes: [], total: 0, limit: 50, offset: 0 } }));
+	await page.route('**/api/imports', route => unavailable ? route.fulfill({ status: 503, body: 'unavailable' }) : route.fulfill({ json: { sources: [{ source_url: 'https://www.budgetbytes.com/category/recipes/vegetarian/vegan/', name: 'Vegan Recipes', stage: 'importing', total: 10, counts: { imported: saved, pending: 10 - saved }, error: null }] } }));
+	await page.goto('/recipes');
+	await expect(page.getByLabel('Recipe imports')).toContainText('1 of 10 recipes saved');
+	unavailable = true;
+	await expect(page.getByLabel('Recipe imports')).toContainText('Reconnecting', { timeout: 10000 });
+	await expect(page.getByLabel('Recipe imports')).toContainText('1 of 10 recipes saved');
+	unavailable = false;
+	saved = 2;
+	await page.getByRole('button', { name: 'Refresh now' }).click();
+	await expect(page.getByLabel('Recipe imports')).toContainText('2 of 10 recipes saved');
+	await expect(page.getByLabel('Recipe imports')).toContainText('Live updates');
+});
