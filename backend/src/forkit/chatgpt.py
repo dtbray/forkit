@@ -249,15 +249,14 @@ def login(path: Path, port: int = 1455) -> None:
 
 def install_on_lab(path: Path, host: str, identity: Path) -> None:
     """Explicit helper option: transfer via existing SSH, never through browser storage."""
-    if (
-        not host
-        or host.startswith("-")
-        or any(
-            c not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.@:-"
-            for c in host
-        )
-    ):
-        raise ConnectionError("Invalid SSH host")
+    allowed_hosts = {
+        "ansible@192.168.1.153": "ansible@192.168.1.153",
+        "ansible@100.76.92.82": "ansible@100.76.92.82",
+    }
+    if host not in allowed_hosts:
+        raise ConnectionError("Only the configured lab host can receive ChatGPT credentials")
+    target = allowed_hosts[host]
+    identity = identity.expanduser().resolve()
     value = read_credentials(path)
     installer = (
         "import json,os,pathlib,sys,uuid; "
@@ -274,14 +273,15 @@ def install_on_lab(path: Path, host: str, identity: Path) -> None:
         [
             "ssh",
             "-i",
-            str(identity.expanduser()),
+            str(identity),
             "-o",
             "BatchMode=yes",
             "-o",
             "StrictHostKeyChecking=yes",
             "-o",
             "ConnectTimeout=10",
-            host,
+            "--",
+            target,
             "sudo -n incus exec forkit -- python3 -c " + shlex.quote(installer),
         ],
         input=json.dumps(value),
@@ -304,7 +304,9 @@ def main():
     )
     parser.add_argument("--port", type=int, default=1455)
     parser.add_argument(
-        "--install-host", help="Optional existing SSH host owning the lab's forkit Incus guest"
+        "--install-host",
+        choices=["ansible@192.168.1.153", "ansible@100.76.92.82"],
+        help="Install via the existing Precision lab host",
     )
     parser.add_argument("--identity", type=Path, default=Path.home() / ".ssh/homelab_ed25519")
     args = parser.parse_args()

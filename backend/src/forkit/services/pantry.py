@@ -65,7 +65,7 @@ def canonical_name(value: str) -> str:
 def text_candidates(value: str) -> list[Candidate]:
     # Handle dictated list separators and common preparation suffixes.
     value = re.sub(r"\b(?:new line|next item)\b", "\n", value, flags=re.I)
-    lines = re.split(r"[\n;,]+|\s+and\s+", value)
+    lines = re.split(r"[\n;,]+|\band\b", value, flags=re.I)
     if sum(bool(line.strip()) for line in lines) > 100:
         raise HTTPException(422, "Use at most 100 ingredients at a time")
     result = []

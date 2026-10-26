@@ -259,4 +259,6 @@ def test_lab_install_never_puts_tokens_in_ssh_arguments(tmp_path):
         assert "StrictHostKeyChecking=yes" in call.args[0]
         with pytest.raises(chatgpt.ConnectionError):
             chatgpt.install_on_lab(path, "-oProxyCommand=bad", tmp_path / "key")
+        with pytest.raises(chatgpt.ConnectionError):
+            chatgpt.install_on_lab(path, "attacker@example.com", tmp_path / "key")
         assert transfer.call_count == 1
