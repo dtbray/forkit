@@ -14,6 +14,7 @@ dependencies = [
     "sqlalchemy>=2.0",
     "alembic>=1.13",
     "httpx>=0.27",
+    "httpcore>=1,<2",
     "extruct",
     "recipe-scrapers>=15",
     "bleach",

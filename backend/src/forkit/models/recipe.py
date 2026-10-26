@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, Float, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, Float, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import Base
@@ -19,7 +19,7 @@ def _uuid4_str() -> str:
 
 
 def _utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 class Recipe(Base):
@@ -40,15 +40,14 @@ class Recipe(Base):
     cuisine: Mapped[str | None] = mapped_column(String, nullable=True)
     meal_type: Mapped[str | None] = mapped_column(String, nullable=True)
     cook_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    last_cooked: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
+    last_cooked: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    favorite: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
     )
     rating: Mapped[int | None] = mapped_column(Integer, nullable=True)
     user_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     view_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    last_viewed: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    last_viewed: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # "jsonld", "adapter:<name>", "llm", "manual", "vision"
     parser_source: Mapped[str | None] = mapped_column(String, nullable=True)
     parser_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
@@ -72,6 +71,14 @@ class Recipe(Base):
         back_populates="recipes",
     )
 
-    __table_args__ = (
-        UniqueConstraint("source_url", name="uq_recipe_source_url"),
+    __table_args__ = (UniqueConstraint("source_url", name="uq_recipe_source_url"),)
+
+
+class DeletedRecipe(Base):
+    """Remember an explicit deletion so category refreshes cannot undo it."""
+
+    __tablename__ = "deleted_recipe"
+    source_url: Mapped[str] = mapped_column(String, primary_key=True)
+    deleted_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow
     )

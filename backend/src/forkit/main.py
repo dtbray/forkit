@@ -113,13 +113,12 @@ app.include_router(feed_router, prefix="/api")
 
 
 @app.get("/healthz")
-async def health() -> dict[str, str]:
+async def health():
+    from .readiness import check_readiness
+    from starlette.concurrency import run_in_threadpool
     settings = get_settings()
-    return {
-        "status": "ok",
-        "db": str(settings.forkit_db_path),
-        "image_dir": str(settings.forkit_image_dir),
-    }
+    result = await run_in_threadpool(check_readiness, settings.forkit_db_path, settings.forkit_image_dir)
+    return JSONResponse(result, status_code=200 if result["status"] == "ok" else 503)
 
 
 # Register WebP even on slim images without a system MIME database.
@@ -143,10 +142,14 @@ async def spa_fallback(full_path: str) -> FileResponse:
     if full_path.startswith(("api/", "api", "data/")):
         return JSONResponse({"detail": "Not Found"}, status_code=404)
     if _static_dir.exists():
-        candidate = _static_dir / full_path
+        root = _static_dir.resolve()
+        candidate = (root / full_path).resolve()
+        # Reject traversal and symlinks escaping the packaged SPA directory.
+        if not candidate.is_relative_to(root):
+            return JSONResponse({"detail": "Not Found"}, status_code=404)
         if candidate.is_file():
             return FileResponse(candidate)
-        index = _static_dir / "index.html"
-        if index.exists():
+        index = (root / "index.html").resolve()
+        if index.is_relative_to(root) and index.is_file():
             return FileResponse(index)
     return JSONResponse({"detail": "Not Found"}, status_code=404)

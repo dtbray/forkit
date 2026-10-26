@@ -31,3 +31,44 @@ The lab deployment is declared in homelab `ops/forkit/compose.yml`. Its worker s
 
 
 The navigation's Color theme selector offers System, Light and Dark. System follows the OS color preference automatically; manual choices persist in local storage. The saved theme is applied before styles paint to avoid a light flash, and CSS overrides cover cards, forms, recipe details and cooking views. Storage restrictions do not prevent changing the current theme.
+
+
+## Configured household worker
+
+Run `python -m forkit.import_worker --config /config/imports.json` with a read-only
+configuration file:
+
+```json
+{
+  "sources": [
+    "https://www.budgetbytes.com/category/recipes/vegetarian/",
+    "https://www.budgetbytes.com/category/recipes/vegetarian/vegan/"
+  ],
+  "delay_seconds": 5,
+  "batch_size": 10,
+  "refresh_seconds": 86400
+}
+```
+
+The worker processes each source in turn, importing up to ten recipes followed
+by up to ten missing images. It shares request pacing across sources, resumes
+SQLite checkpoints after restart, and pauses every category sharing an origin
+when that publisher blocks requests until the next daily cycle, while allowing
+other publishers to continue. `--once` drains the current manifests then exits.
+The single-category CLI remains available for targeted retries. Publisher
+category membership is saved as vegetarian/vegan tags, preserving household tags;
+these reflect publisher categories rather than an independent dietary verification.
+Vegan recipes also receive the vegetarian tag. The library can filter by diet
+or source hostname and uses generated thumbnail/medium variants on cards.
+
+## Build and update policy
+
+The container consumes `backend/uv.lock` using `uv sync --locked`, and npm uses
+`npm ci`. Node, Python, and uv container sources are pinned by digest. Weekly
+Dependabot pull requests propose dependency, image and Actions updates; review
+and rerun tests before deploying an updated digest. Debian package repositories
+and the downloaded NLTK dataset remain external build inputs; image digests are
+the deployment artifact identity, rather than a claim of byte-for-byte builds.
+CI requires backend tests, Svelte type checks, frontend unit tests and desktop/
+phone browser tests before publishing the container, then smoke-tests the image
+as its non-root runtime user.

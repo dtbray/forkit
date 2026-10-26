@@ -41,12 +41,34 @@
 
 	let { data }: { data: PageData } = $props();
 
-	// ── Local state (UI-layer; backend stubs noted inline) ────────────────────────
-	let isFavorite: boolean = $state(data.favorite);
-	let userNotes: string = $state(data.user_notes ?? '');
+	// ── Local state ────────────────────────
+	let isFavorite: boolean = $state(false);
+	let userNotes: string = $state('');
 	let notesChanged: boolean = $state(false);
 	let notesSaving: boolean = $state(false);
-	let deleteDialogOpen: boolean = $state(false);
+	let actionError = $state('');
+	let favoriteSaving = $state(false);
+	let deleting = $state(false);
+	let savedNotes = $state('');
+	let rating = $state<number | null>(null);
+	let ratingSaving = $state(false);
+
+	$effect(() => {
+		isFavorite = data.favorite;
+		userNotes = data.user_notes ?? '';
+		savedNotes = data.user_notes ?? '';
+		rating = data.rating;
+		notesChanged = false;
+	});
+
+	async function saveChanges(changes: Record<string, unknown>): Promise<Recipe> {
+		const response = await fetch(`/api/recipes/${data.id}`, {
+			method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify(changes)
+		});
+		if (!response.ok) throw new Error('Your changes could not be saved. Please try again.');
+		return response.json();
+	}
 
 	// ── Formatting helpers ────────────────────────────────────────────────────────
 	function formatDurationOrDash(iso: string | null | undefined): string {
@@ -81,44 +103,54 @@
 
 	// ── Favorite toggle ──────────────────────────────────────────────────────────
 	async function toggleFavorite() {
-		isFavorite = !isFavorite;
+		if (favoriteSaving) return;
+		favoriteSaving = true;
+		actionError = '';
 		try {
-			await fetch(`/api/recipes/${data.id}`, {
-				method: 'PATCH',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ favorite: isFavorite })
-			});
+			const recipe = await saveChanges({ favorite: !isFavorite });
+			isFavorite = recipe.favorite;
 		} catch {
-			// Stub: silently tolerate network failure; local state reflects intent
+			actionError = 'Favorite could not be saved. Please try again.';
+		} finally { favoriteSaving = false; }
+	}
+
+	async function saveRating(event: Event) {
+		const selected = (event.target as HTMLSelectElement).value;
+		ratingSaving = true;
+		actionError = '';
+		try {
+			const recipe = await saveChanges({ rating: selected ? Number(selected) : null });
+			rating = recipe.rating;
+		} catch {
+			(event.target as HTMLSelectElement).value = rating === null ? '' : String(rating);
+			actionError = 'Rating could not be saved. Please try again.';
 		}
+		finally { ratingSaving = false; }
 	}
 
 	// ── User notes ───────────────────────────────────────────────────────────────
 	function handleNotesChange() {
-		notesChanged = userNotes !== (data.user_notes ?? '');
+		notesChanged = userNotes !== savedNotes;
 	}
 
 	async function saveNotes() {
 		if (!notesChanged || notesSaving) return;
 		notesSaving = true;
+		actionError = '';
+		const submittedNotes = userNotes;
 		try {
-			await fetch(`/api/recipes/${data.id}`, {
-				method: 'PATCH',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ user_notes: userNotes })
-			});
-			notesChanged = false;
+			const recipe = await saveChanges({ user_notes: submittedNotes });
+			savedNotes = recipe.user_notes ?? '';
+			notesChanged = userNotes !== savedNotes;
 		} catch {
-			// Stub: silently tolerate network failure
-		} finally {
-			notesSaving = false;
-		}
+			actionError = 'Notes could not be saved. Your edits are still here; please try again.';
+		} finally { notesSaving = false; }
 	}
 
 	// ── Delete ───────────────────────────────────────────────────────────────────
 	function requestDelete() {
 		const confirmed = window.confirm(
-			`Permanently delete "${data.title}"?\n\nThis recipe will be removed from your vault and cannot be recovered.`
+			`Permanently delete "${data.title}"?\n\nThis recipe will be removed from your vault. Automatic imports will not add it again.`
 		);
 		if (confirmed) {
 			performDelete();
@@ -126,15 +158,18 @@
 	}
 
 	async function performDelete() {
+		if (deleting) return;
+		deleting = true;
+		actionError = '';
 		try {
 			const res = await fetch(`/api/recipes/${data.id}`, { method: 'DELETE' });
-			if (res.ok) {
-				goto('/recipes');
-			}
+			if (!res.ok) throw new Error('delete failed');
+			await goto('/recipes', { invalidateAll: true });
 		} catch {
-			// Network error — stay on page; user can retry
-		}
+			actionError = 'Recipe could not be deleted. Please try again.';
+		} finally { deleting = false; }
 	}
+
 </script>
 
 <svelte:head>
@@ -143,6 +178,7 @@
 </svelte:head>
 
 <main class="detail-page">
+	{#if actionError}<p class="action-error" role="alert">{actionError}</p>{/if}
 	<!-- ── Back nav ──────────────────────────────────────────────────────────────── -->
 	<a href="/recipes" class="back-link" aria-label="Back to all recipes">
 		<span class="back-chevron" aria-hidden="true">‹</span>
@@ -179,6 +215,7 @@
 				class="favorite-btn"
 				class:favorite-btn--active={isFavorite}
 				onclick={toggleFavorite}
+				disabled={favoriteSaving}
 				aria-pressed={isFavorite}
 				aria-label={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
 				title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
@@ -215,18 +252,15 @@
 			</div>
 		</div>
 
-		<!-- ── Rating (read-only) ───────────────────────────────────────────────── -->
-		{#if data.rating !== null && data.rating > 0}
-			<div class="rating-row" aria-label="Rating: {data.rating} out of 5, {starLabel(data.rating)}">
-				<span class="rating-label">Rating</span>
-				<div class="stars" aria-hidden="true">
-					{#each [1, 2, 3, 4, 5] as star}
-						<span class="star" class:star--filled={star <= (data.rating ?? 0)}>★</span>
-					{/each}
-				</div>
-				<span class="sr-only">{data.rating} out of 5 — {starLabel(data.rating)}</span>
-			</div>
-		{/if}
+		<div class="rating-row">
+			<label for="recipe-rating">Your rating</label>
+			<select id="recipe-rating" value={rating ?? ''} onchange={saveRating} disabled={ratingSaving}>
+				<option value="">Not rated</option>
+				{#each [1, 2, 3, 4, 5] as star}
+					<option value={star}>{star} — {starLabel(star)}</option>
+				{/each}
+			</select>
+		</div>
 
 		<!-- ── Tags ─────────────────────────────────────────────────────────────── -->
 		{#if data.tags.length > 0}
@@ -287,6 +321,9 @@
 				aria-label="Personal notes about this recipe"
 				rows="4"
 			></textarea>
+			<button class="btn-save-notes" onclick={saveNotes} disabled={!notesChanged || notesSaving}>
+				{notesSaving ? 'Saving notes…' : notesChanged ? 'Save notes' : 'Notes saved'}
+			</button>
 		</section>
 
 		<!-- ── Source attribution ───────────────────────────────────────────────── -->
@@ -306,7 +343,7 @@
 
 		<!-- ── Danger zone: Delete ──────────────────────────────────────────────── -->
 		<div class="danger-zone" aria-label="Danger zone">
-			<button class="btn-delete" onclick={requestDelete} aria-label="Delete this recipe permanently">
+			<button class="btn-delete" onclick={requestDelete} disabled={deleting} aria-label="Delete this recipe permanently">
 				Delete recipe
 			</button>
 		</div>
@@ -321,6 +358,7 @@
 </main>
 
 <style>
+	.action-error { color: var(--color-error, #b42318); padding: 1rem; border: 1px solid currentColor; border-radius: .5rem; }
 	/* ── Page root ───────────────────────────────────────────────────────────── */
 	.detail-page {
 		flex: 1;
@@ -329,17 +367,6 @@
 	}
 
 	/* ── Screen reader only ─────────────────────────────────────────────────── */
-	.sr-only {
-		position: absolute;
-		width: 1px;
-		height: 1px;
-		padding: 0;
-		margin: -1px;
-		overflow: hidden;
-		clip: rect(0, 0, 0, 0);
-		white-space: nowrap;
-		border-width: 0;
-	}
 
 	/* ── Back link ───────────────────────────────────────────────────────────── */
 	.back-link {
@@ -557,31 +584,9 @@
 		margin-bottom: var(--space-4);
 	}
 
-	.rating-label {
-		font-family: var(--font-body);
-		font-size: var(--text-label-sm-size);
-		font-weight: var(--text-label-sm-weight);
-		letter-spacing: var(--text-label-sm-tracking);
-		color: var(--color-ink-tertiary);
-		text-transform: uppercase;
-	}
 
-	.stars {
-		display: flex;
-		gap: 2px;
-	}
 
-	.star {
-		font-size: 1.25rem;
-		line-height: 1;
-		color: var(--color-ink-tertiary);
-		opacity: 0.3;
-	}
 
-	.star--filled {
-		color: var(--color-clay);
-		opacity: 1;
-	}
 
 	/* ── Tags ────────────────────────────────────────────────────────────────── */
 	.tags-row {

@@ -44,13 +44,9 @@ export default defineConfig({
 				globPatterns: ['**/*.{js,css,html,ico,png,svg,webp}'],
 				runtimeCaching: [
 					{
-						// Cache recipe detail API responses — ADR-001 §3g: cache-first for favorites/last-20-viewed
-						urlPattern: /^\/api\/recipes\/[^/]+$/,
-						handler: 'CacheFirst',
-						options: {
-							cacheName: 'recipes-cache',
-							expiration: { maxAgeSeconds: 60 * 60 * 24 * 7 }
-						}
+						// Mutations must be visible on the next read; do not serve stale personal notes.
+						urlPattern: ({ url }) => /^\/api\/recipes(?:\/|$)/.test(url.pathname),
+						handler: 'NetworkOnly'
 					},
 					{
 						// Cache image variants — ADR-001 §3g: cache-first for recipe images

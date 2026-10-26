@@ -11,11 +11,25 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Frontend checks and browser tests
+        run: |
+          cd frontend
+          npm ci
+          npm run check
+          npm run test:unit -- --run
+          npm run build
+          npx playwright install --with-deps chromium
+          npx playwright test -c playwright.imports.config.ts
       - name: Backend tests
         run: |
           python3 -m venv /tmp/forkit-tests
-          /tmp/forkit-tests/bin/pip install './backend[dev]'
-          /tmp/forkit-tests/bin/pytest backend/tests -q
+          /tmp/forkit-tests/bin/pip install uv==0.11.26
+          /tmp/forkit-tests/bin/uv run --project backend --locked --extra dev pytest backend/tests -q
       - name: Build and publish
         env:
           GH_TOKEN: ${{ github.token }}

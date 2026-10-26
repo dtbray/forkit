@@ -8,6 +8,8 @@
 		id: string;
 		title: string;
 		hero_image_path: string | null;
+		thumb_image_path?: string | null;
+		medium_image_path?: string | null;
 		cuisine: string | null;
 		total_time: string | null;
 		favorite: boolean;
@@ -28,6 +30,8 @@
 	// ── Filter state ─────────────────────────────────────────────────────────────
 	let searchQuery: string = $state($page.url.searchParams.get('q') ?? '');
 	let cuisineFilter: string = $state($page.url.searchParams.get('cuisine') ?? '');
+	let dietFilter = $state($page.url.searchParams.get('tag') ?? '');
+	let sourceFilter = $state($page.url.searchParams.get('source') ?? '');
 	let favoriteFilter: boolean = $state($page.url.searchParams.get('favorite') === 'true');
 
 	// ── Derived: unique cuisines from current recipe list ────────────────────────
@@ -43,6 +47,8 @@
 		if (searchQuery.trim()) params.set('q', searchQuery.trim());
 		if (cuisineFilter) params.set('cuisine', cuisineFilter);
 		if (favoriteFilter) params.set('favorite', 'true');
+		if (dietFilter) params.set('tag', dietFilter);
+		if (sourceFilter) params.set('source', sourceFilter);
 		goto(`/recipes?${params}`, { keepFocus: true, noScroll: true });
 	}
 
@@ -98,6 +104,22 @@
 			/>
 		</label>
 
+		<label class="filter-label" for="diet-select">
+			<span class="sr-only">Filter by diet</span>
+			<select id="diet-select" class="filter-select" bind:value={dietFilter} onchange={handleSelectChange} aria-label="Filter by diet">
+				<option value="">All diets</option>
+				<option value="vegetarian">Vegetarian</option>
+				<option value="vegan">Vegan</option>
+			</select>
+		</label>
+		<label class="filter-label" for="source-select">
+			<span class="sr-only">Filter by source</span>
+			<select id="source-select" class="filter-select" bind:value={sourceFilter} onchange={handleSelectChange} aria-label="Filter by source">
+				<option value="">All sources</option>
+				<option value="www.budgetbytes.com">Budget Bytes</option>
+			</select>
+		</label>
+
 		<label class="filter-label" for="cuisine-select">
 			<span class="sr-only">Filter by cuisine</span>
 			<select
@@ -137,7 +159,9 @@
 						<div class="card-hero" aria-hidden="true">
 							{#if recipe.hero_image_path}
 								<img
-									src="/data/images/{recipe.hero_image_path}"
+									src="/data/images/{recipe.medium_image_path ?? recipe.hero_image_path}"
+									srcset={recipe.thumb_image_path && recipe.medium_image_path ? `/data/images/${recipe.thumb_image_path} 320w, /data/images/${recipe.medium_image_path} 800w, /data/images/${recipe.hero_image_path} 1600w` : undefined}
+									sizes="(max-width: 600px) 100vw, (max-width: 1000px) 50vw, 33vw"
 									alt=""
 									class="card-hero-img"
 									loading="lazy"

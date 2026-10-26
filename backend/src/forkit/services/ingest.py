@@ -23,7 +23,7 @@ from ..llm.anthropic import AnthropicProvider
 from ..llm.base import LLMExtractionError
 from ..llm.ollama import OllamaProvider
 from ..llm.router import RoutedLLMProvider
-from ..models import Ingredient, Recipe, Tag, recipe_tag
+from ..models import DeletedRecipe, Ingredient, Recipe, Tag, recipe_tag
 from ..parser.fetcher import FetchError, URLForbiddenError, safe_fetch
 from ..parser.images import fetch_and_store_image
 from ..parser.ingredients import structure_ingredient
@@ -87,6 +87,9 @@ async def ingest_url(
     call it directly — no HTTP self-call.
     """
     log.info("ingest_url", url=url)
+
+    if session.get(DeletedRecipe, url) is not None:
+        raise HTTPException(status_code=409, detail={"detail": "previously_deleted"})
 
     # --- Duplicate check ---------------------------------------------------
     existing = session.query(Recipe).filter_by(source_url=url).first()

@@ -20,7 +20,7 @@ import httpx
 from fastapi import HTTPException
 
 from .config import get_settings
-from .models import Recipe
+from .models import Recipe, Tag
 from .parser.fetcher import FetchError, safe_fetch
 from .parser.images import store_image_bytes
 from .parser.jsonld import extract_jsonld
@@ -244,7 +244,53 @@ class CategoryImporter:
             page += 1
         raise ValueError("Discovery exceeded the 1000-page safety limit")
 
+    def apply_category_tags(self, recipe: Recipe, session) -> None:
+        """Keep publisher category membership alongside household tags."""
+        names = {
+            part for part in urlsplit(self.url).path.split("/") if part in {"vegan", "vegetarian"}
+        }
+        if "vegan" in names:
+            names.add("vegetarian")
+        present = {tag.name for tag in recipe.tags}
+        for name in sorted(names - present):
+            tag = session.query(Tag).filter_by(name=name).first()
+            if tag is None:
+                tag = Tag(name=name)
+                session.add(tag)
+            recipe.tags.append(tag)
+        if names - present:
+            session.commit()
+
+    def backfill_category_tags(self) -> None:
+        if self.meta("category_tags_v1"):
+            return
+        if self.session_factory is None:
+            from .db import SessionLocal
+
+            self.session_factory = SessionLocal
+        with self.session_factory() as session:
+            for row in self.db.execute(
+                "SELECT url FROM items WHERE status IN ('imported','existing','changed')"
+            ):
+                recipe = session.query(Recipe).filter_by(source_url=row["url"]).first()
+                if recipe:
+                    self.apply_category_tags(recipe, session)
+        self.set_meta("category_tags_v1", "1")
+        self.db.commit()
+
+    def has_pending_work(self) -> bool:
+        pending = self.db.execute("SELECT 1 FROM items WHERE status='pending' LIMIT 1").fetchone()
+        images = (
+            self.images_enabled
+            and self.db.execute("""
+            SELECT 1 FROM items LEFT JOIN image_jobs ON items.recipe_id=image_jobs.recipe_id
+            WHERE items.status IN ('imported','existing') AND items.recipe_id IS NOT NULL
+              AND image_jobs.recipe_id IS NULL LIMIT 1""").fetchone()
+        )
+        return bool(pending or images)
+
     async def ensure_image(self, row, recipe: Recipe, session) -> None:
+        self.apply_category_tags(recipe, session)
         if not self.images_enabled:
             return
         if recipe.hero_image_path:
@@ -316,7 +362,11 @@ class CategoryImporter:
             self.db.execute("DELETE FROM image_jobs WHERE status='failed'")
             self.db.commit()
         rows = self.db.execute(
-            "SELECT * FROM items WHERE status IN ('imported','existing') ORDER BY post_id DESC"
+            """SELECT items.* FROM items LEFT JOIN image_jobs
+            ON items.recipe_id=image_jobs.recipe_id
+            WHERE items.status IN ('imported','existing') AND items.recipe_id IS NOT NULL
+            AND image_jobs.recipe_id IS NULL
+            ORDER BY post_id DESC"""
         ).fetchall()
         for row in rows[:limit] if limit else rows:
             with self.session_factory() as session:
@@ -325,6 +375,12 @@ class CategoryImporter:
                     self.stage = "images"
                     self.publish()
                     await self.ensure_image(row, recipe, session)
+                else:
+                    with self.db:
+                        self.db.execute(
+                            "INSERT OR REPLACE INTO image_jobs VALUES (?, 'missing', NULL)",
+                            (row["recipe_id"],),
+                        )
             self.publish()
 
     async def import_pending(self, *, limit: int | None = None, retry_failed: bool = False) -> None:
@@ -395,9 +451,10 @@ class CategoryImporter:
                 self.error = None
                 await self.load_robots()
                 await self.discover(refresh=refresh)
-                await self.backfill_images(limit=limit, retry_failed=retry_failed)
+                self.backfill_category_tags()
                 await self.import_pending(limit=limit, retry_failed=retry_failed)
-                self.stage = "idle" if self.status()["counts"].get("pending", 0) else "complete"
+                await self.backfill_images(limit=limit, retry_failed=retry_failed)
+                self.stage = "idle" if self.has_pending_work() else "complete"
             except Exception as exc:
                 self.stage, self.error = "paused", str(exc)[:500]
                 raise

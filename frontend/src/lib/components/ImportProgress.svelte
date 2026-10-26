@@ -5,7 +5,7 @@
 	type Source = { source_url: string; name: string; stage: string; total: number; counts: Record<string, number>; error: string | null; images?: Record<string, number> };
 	let sources = $state<Source[]>([]);
 	let connection = $state<'live' | 'reconnecting'>('live');
-	let refreshNow = () => {};
+	let refreshNow = $state<() => void>(() => {});
 	const saved = (s: Source) => (s.counts.imported ?? 0) + (s.counts.existing ?? 0) + (s.counts.changed ?? 0);
 	const processed = (s: Source) => saved(s) + (s.counts.skipped ?? 0) + (s.counts.failed ?? 0);
 

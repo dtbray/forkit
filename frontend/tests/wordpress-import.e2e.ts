@@ -101,3 +101,24 @@ test('photo backfill updates an existing card without a manual refresh', async (
 	await expect(page.getByLabel('Recipe imports')).toContainText('1 photos');
 	await expect.poll(() => page.locator('.card-hero-img').evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0);
 });
+
+test('diet and source filters persist through live refresh and cards request smaller variants', async ({ page }) => {
+	await page.route(/\/api\/recipes(\?.*)?$/, route => route.fulfill({ json: { recipes: [{ id: 'filtered', title: 'Vegan lentils', hero_image_path: 'responsive/hero.webp', thumb_image_path: 'responsive/thumb.webp', medium_image_path: 'responsive/medium.webp', tags: ['vegan'], source_url: 'https://www.budgetbytes.com/lentils/', cuisine: null, total_time: null, cook_count: 0 }], total: 1, limit: 50, offset: 0 } }));
+	await page.route('**/api/imports', route => route.fulfill({ json: { sources: [] } }));
+	const requested: string[] = [];
+	await page.route('**/data/images/responsive/*.webp', route => {
+		requested.push(route.request().url());
+		return route.fulfill({ contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600"><rect width="800" height="600" fill="orange"/></svg>' });
+	});
+	await page.goto('/recipes');
+	await page.getByLabel('Filter by diet', { exact: true }).selectOption('vegan');
+	await expect(page).toHaveURL(/tag=vegan/);
+	await page.getByLabel('Filter by source', { exact: true }).selectOption('www.budgetbytes.com');
+	await expect(page).toHaveURL(/source=www.budgetbytes.com/);
+	await page.reload();
+	await expect(page.getByLabel('Filter by diet', { exact: true })).toHaveValue('vegan');
+	await expect(page.getByLabel('Filter by source', { exact: true })).toHaveValue('www.budgetbytes.com');
+	await expect(page.locator('.card-hero-img')).toHaveAttribute('srcset', /thumb.webp 320w/);
+	await expect.poll(() => requested.length).toBeGreaterThan(0);
+	expect(requested.every(url => !url.endsWith('/hero.webp'))).toBe(true);
+});

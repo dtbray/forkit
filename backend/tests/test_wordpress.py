@@ -321,3 +321,53 @@ async def test_other_category_reuses_cached_page_and_recipe(
     assert db_session.query(Recipe).count() == 1
     assert db_session.query(Recipe).one().hero_image_path
     other.db.close()
+
+
+async def test_category_tags_backfill_existing_recipes_without_replacing_tags(importer, db_session):
+    from forkit.models import Tag
+
+    recipe = Recipe(
+        title="Old lentils",
+        instructions="Cook lentils",
+        source_url=BASE + "/old/",
+        tags=[Tag(name="weeknight")],
+    )
+    db_session.add(recipe)
+    db_session.commit()
+    importer.db.execute(
+        "INSERT INTO items(post_id,url,modified,status,recipe_id) VALUES(1,?,'v1','existing',?)",
+        (recipe.source_url, recipe.id),
+    )
+    importer.db.commit()
+    importer.backfill_category_tags()
+    db_session.expire_all()
+    assert {tag.name for tag in db_session.get(Recipe, recipe.id).tags} == {
+        "vegetarian",
+        "weeknight",
+    }
+    importer.backfill_category_tags()
+    assert db_session.query(Tag).filter_by(name="vegetarian").count() == 1
+
+
+async def test_limited_image_batches_advance_past_finished_jobs(importer, db_session, monkeypatch):
+    for post_id in range(1, 4):
+        recipe = Recipe(
+            title=f"Recipe {post_id}",
+            instructions="Cook",
+            source_url=f"{BASE}/{post_id}/",
+            hero_image_path=f"{post_id}/hero.webp",
+        )
+        db_session.add(recipe)
+        db_session.flush()
+        importer.db.execute(
+            "INSERT INTO items(post_id,url,modified,status,recipe_id) "
+            "VALUES(?,?,'v1','imported',?)",
+            (post_id, recipe.source_url, recipe.id),
+        )
+    db_session.commit()
+    importer.db.commit()
+    assert importer.has_pending_work()
+    for _ in range(3):
+        await importer.backfill_images(limit=1)
+    assert not importer.has_pending_work()
+    assert importer.status()["images"]["existing"] == 3

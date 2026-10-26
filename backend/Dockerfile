@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # ── Stage 1: build frontend ─────────────────────────────────────────────────────
-FROM node:22-slim AS frontend-builder
+FROM node:22-slim@sha256:de170b39439eb0e5a3444ad7d60b015614a381e10fecae2e30ec9e735122f38d AS frontend-builder
 
 WORKDIR /app
 
@@ -13,7 +13,9 @@ RUN npm run build
 
 
 # ── Stage 2: build Python dependencies ─────────────────────────────────────────
-FROM python:3.12-slim AS builder
+FROM python:3.12-slim-bookworm@sha256:6a0e06f5ba0b373d051aabd3fffb9b873f27f9a2a3a14bcbe37dee6f0e3bbc70 AS builder
+
+COPY --from=ghcr.io/astral-sh/uv:0.11.26@sha256:3d868e555f8f1dbc324afa005066cd11e1053fc4743b9808ca8025283e65efa5 /uv /usr/local/bin/uv
 
 WORKDIR /build
 
@@ -24,15 +26,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libxslt1-dev \
     && rm -rf /var/lib/apt/lists/*
 
-COPY backend/pyproject.toml backend/README.md ./
+COPY backend/pyproject.toml backend/uv.lock backend/README.md ./
 # Copy source so hatchling can resolve the package metadata
 COPY backend/src ./src
 
-RUN pip install --no-cache-dir --prefix=/install .
+ENV UV_PROJECT_ENVIRONMENT=/opt/venv
+RUN uv sync --locked --no-dev --no-editable --python /usr/local/bin/python3
 
 
 # ── Stage 3: runtime image ─────────────────────────────────────────────────────
-FROM python:3.12-slim AS runtime
+FROM python:3.12-slim-bookworm@sha256:6a0e06f5ba0b373d051aabd3fffb9b873f27f9a2a3a14bcbe37dee6f0e3bbc70 AS runtime
 
 # S8 — non-root user
 RUN groupadd --gid 1000 forkit && \
@@ -48,7 +51,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy installed packages from builder
-COPY --from=builder /install /usr/local
+COPY --from=builder /opt/venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
 
 # Bundle the POS tagger: the unprivileged runtime must not download language data.
 ENV NLTK_DATA=/usr/local/share/nltk_data
