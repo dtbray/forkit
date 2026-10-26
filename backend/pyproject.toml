@@ -19,7 +19,7 @@ dependencies = [
     "bleach",
     "ingredient-parser-nlp",
     "Pillow>=11",
-    "selectolax",
+    "selectolax>=0.4.8,<1",
     "readability-lxml",
     "structlog",
     "slowapi",

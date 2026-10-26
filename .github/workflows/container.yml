@@ -18,4 +18,15 @@ jobs:
           echo "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
           image="ghcr.io/dtbray/forkit:sha-$GITHUB_SHA"
           docker build --provenance=false --label "org.opencontainers.image.source=https://github.com/dtbray/forkit" --label "org.opencontainers.image.revision=$GITHUB_SHA" -f backend/Dockerfile -t "$image" .
+          docker run -d --name forkit-smoke -p 127.0.0.1:8080:8000 "$image"
+          ready=0
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8080/healthz; then ready=1; break; fi
+            sleep 2
+          done
+          docker logs forkit-smoke
+          test "$ready" = 1
+          curl -fsS http://127.0.0.1:8080/ >/dev/null
+          curl -fsS http://127.0.0.1:8080/api/recipes >/dev/null
+          docker rm -f forkit-smoke
           docker push "$image"
