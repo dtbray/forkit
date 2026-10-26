@@ -22,6 +22,8 @@ from fastapi import HTTPException
 from .config import get_settings
 from .models import Recipe
 from .parser.fetcher import FetchError, safe_fetch
+from .parser.images import store_image_bytes
+from .parser.jsonld import extract_jsonld
 from .services.ingest import ingest_url
 
 USER_AGENT = "ForkitCategoryImporter/0.1 (+https://github.com/dtbray/forkit)"
@@ -88,6 +90,8 @@ class CategoryImporter:
         self.db = sqlite3.connect(self.directory / "state.sqlite")
         self.db.row_factory = sqlite3.Row
         self.db.executescript("""
+            CREATE TABLE IF NOT EXISTS image_jobs (
+                recipe_id TEXT PRIMARY KEY, status TEXT NOT NULL, error TEXT);
             CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS items (
                 post_id INTEGER PRIMARY KEY, url TEXT NOT NULL UNIQUE,
@@ -96,6 +100,7 @@ class CategoryImporter:
         """)
         self.stage = "idle"
         self.error: str | None = None
+        self.images_enabled = True
 
     def meta(self, key: str, default: str = "") -> str:
         row = self.db.execute("SELECT value FROM meta WHERE key=?", (key,)).fetchone()
@@ -112,6 +117,9 @@ class CategoryImporter:
             "stage": self.stage,
             "total": sum(counts.values()),
             "counts": counts,
+            "images": dict(
+                self.db.execute("SELECT status, count(*) FROM image_jobs GROUP BY status")
+            ),
             "error": self.error,
             "updated_at": datetime.now(UTC).isoformat(),
         }
@@ -122,7 +130,9 @@ class CategoryImporter:
         tmp.write_text(json.dumps(self.status()))
         tmp.replace(target)
 
-    async def fetch(self, url: str, *, check_robots: bool = True) -> tuple[bytes, dict]:
+    async def fetch(
+        self, url: str, *, check_robots: bool = True, max_bytes: int = 5 * 1024 * 1024
+    ) -> tuple[bytes, dict]:
         if check_robots and self.robots and not self.robots.can_fetch(USER_AGENT, url):
             raise ImportPaused(f"robots.txt disallows {url}")
         for attempt in range(4):
@@ -130,7 +140,9 @@ class CategoryImporter:
             self.last_request = time.monotonic()
             headers: dict[str, str] = {}
             try:
-                body = await safe_fetch(url, user_agent=USER_AGENT, response_headers=headers)
+                body = await safe_fetch(
+                    url, user_agent=USER_AGENT, response_headers=headers, max_bytes=max_bytes
+                )
                 return body, headers
             except (FetchError, httpx.HTTPError) as exc:
                 status = getattr(exc, "status_code", None)
@@ -232,6 +244,89 @@ class CategoryImporter:
             page += 1
         raise ValueError("Discovery exceeded the 1000-page safety limit")
 
+    async def ensure_image(self, row, recipe: Recipe, session) -> None:
+        if not self.images_enabled:
+            return
+        if recipe.hero_image_path:
+            with self.db:
+                self.db.execute(
+                    "INSERT OR REPLACE INTO image_jobs VALUES (?, 'existing', NULL)", (recipe.id,)
+                )
+            return
+        done = self.db.execute(
+            "SELECT status FROM image_jobs WHERE recipe_id=?", (recipe.id,)
+        ).fetchone()
+        if done and done[0] in {"saved", "missing", "failed"}:
+            return
+        try:
+            version = hashlib.sha256(row["modified"].encode()).hexdigest()[:12]
+            filename = f"{row['post_id']}-{version}.html.gz"
+            cache = self.directory / filename
+            # Reuse the same post's cached page from another category on this site.
+            if not cache.exists():
+                for candidate in self.directory.parent.glob(f"*/{filename}"):
+                    status_file = candidate.parent / "status.json"
+                    if status_file.exists():
+                        source = json.loads(status_file.read_text()).get("source_url", "")
+                        if source_location(source)[1] == self.base:
+                            cache = candidate
+                            break
+            if cache.exists():
+                html = gzip.decompress(cache.read_bytes())
+            else:
+                html, _ = await self.fetch(row["url"])
+                cache.write_bytes(gzip.compress(html))
+            raw = extract_jsonld(
+                html.decode("utf-8", errors="replace"), row["url"], schema_only=True
+            )
+            image_url = raw.get("image_url") if raw else None
+            if not image_url:
+                outcome, error = "missing", None
+            else:
+                canonical_url(
+                    image_url, self.base
+                )  # Keep image requests on the publisher's origin.
+                data, _ = await self.fetch(image_url, max_bytes=10 * 1024 * 1024)
+                path = store_image_bytes(data, get_settings().forkit_image_dir)
+                if path is None:
+                    raise ValueError("Image could not be decoded or stored")
+                recipe.hero_image_path = path
+                session.commit()
+                outcome, error = "saved", None
+        except ImportPaused:
+            raise
+        except Exception as exc:
+            session.rollback()
+            outcome, error = "failed", str(exc)[:500]
+        with self.db:
+            self.db.execute(
+                "INSERT OR REPLACE INTO image_jobs VALUES (?, ?, ?)", (recipe.id, outcome, error)
+            )
+
+    async def backfill_images(
+        self, *, limit: int | None = None, retry_failed: bool = False
+    ) -> None:
+        if not self.images_enabled:
+            return
+        if self.session_factory is None:
+            from .db import SessionLocal
+
+            self.session_factory = SessionLocal
+        if retry_failed:
+            self.db.execute("DELETE FROM image_jobs WHERE status='failed'")
+            self.db.commit()
+        rows = self.db.execute(
+            "SELECT * FROM items WHERE status IN ('imported','existing') ORDER BY post_id DESC"
+        ).fetchall()
+        for row in rows[:limit] if limit else rows:
+            with self.session_factory() as session:
+                recipe = session.query(Recipe).filter_by(source_url=row["url"]).first()
+                if recipe:
+                    self.stage = "images"
+                    self.publish()
+                    await self.ensure_image(row, recipe, session)
+            self.publish()
+
     async def import_pending(self, *, limit: int | None = None, retry_failed: bool = False) -> None:
         if self.session_factory is None:
             from .db import SessionLocal
@@ -247,6 +342,7 @@ class CategoryImporter:
             with self.session_factory() as session:
                 existing = session.query(Recipe).filter_by(source_url=row["url"]).first()
                 if existing:
+                    await self.ensure_image(row, existing, session)
                     self.record(row["post_id"], "existing", existing.id)
                     continue
                 version = hashlib.sha256(row["modified"].encode()).hexdigest()[:12]
@@ -266,6 +362,7 @@ class CategoryImporter:
                         structured_only=True,
                         download_images=False,
                     )
+                    await self.ensure_image(row, session.get(Recipe, result["recipe_id"]), session)
                     self.record(row["post_id"], "imported", result["recipe_id"])
                 except ImportPaused:
                     raise
@@ -298,6 +395,7 @@ class CategoryImporter:
                 self.error = None
                 await self.load_robots()
                 await self.discover(refresh=refresh)
+                await self.backfill_images(limit=limit, retry_failed=retry_failed)
                 await self.import_pending(limit=limit, retry_failed=retry_failed)
                 self.stage = "idle" if self.status()["counts"].get("pending", 0) else "complete"
             except Exception as exc:
@@ -310,6 +408,7 @@ class CategoryImporter:
 
 async def main_async(args: argparse.Namespace) -> int:
     importer = CategoryImporter(args.category_url, delay=args.delay)
+    importer.images_enabled = not args.no_images
     while True:
         try:
             result = await importer.run(
@@ -333,6 +432,7 @@ def main() -> None:
         "--delay", type=float, default=5, help="Seconds between requests (minimum 2)"
     )
     parser.add_argument("--limit", type=int, help="Maximum candidate recipes to process this run")
+    parser.add_argument("--no-images", action="store_true", help="Skip recipe image downloads")
     parser.add_argument("--refresh", action="store_true", help="Refresh the category manifest")
     parser.add_argument("--retry-failed", action="store_true")
     parser.add_argument(

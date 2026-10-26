@@ -2,9 +2,9 @@
 
 Downloads the hero image via the SSRF-safe fetcher, strips EXIF metadata
 by re-encoding through Pillow, and saves three WebP variants:
-    thumb  (320 × 240)
-    medium (800 × 600)
-    hero   (1600 × 1200)
+    thumb  (320 x 240)
+    medium (800 x 600)
+    hero   (1600 x 1200)
 
 The source filename is never trusted; files are stored under
 `{image_dir}/{uuid4}/{variant}.webp`.
@@ -17,7 +17,6 @@ from __future__ import annotations
 import io
 import uuid
 from pathlib import Path
-from typing import Any
 
 import structlog
 
@@ -43,8 +42,6 @@ async def fetch_and_store_image(url: str, image_dir: str) -> str | None:
         Relative path to the hero WebP variant (e.g. "{uuid}/hero.webp"),
         or None on any error (missing image is non-fatal for ingest).
     """
-    from PIL import Image
-
     from .fetcher import FetchError, URLForbiddenError, safe_fetch
 
     try:
@@ -56,6 +53,14 @@ async def fetch_and_store_image(url: str, image_dir: str) -> str | None:
         log.warning("image fetch unexpected error", url=url, error=str(exc))
         return None
 
+    return store_image_bytes(data, image_dir)
+
+
+def store_image_bytes(data: bytes, image_dir: str) -> str | None:
+    """Sanitize already-fetched image bytes without making another request."""
+    from PIL import Image
+
+    url = "cached image bytes"
     try:
         img = Image.open(io.BytesIO(data))
         img.load()  # Force decode — catches corrupt/polyglot files early
@@ -68,10 +73,7 @@ async def fetch_and_store_image(url: str, image_dir: str) -> str | None:
     # metadata across this boundary.
     try:
         # Convert to RGB for WebP compatibility (drops transparency alpha for now)
-        if img.mode in ("RGBA", "LA", "P"):
-            clean_img = img.convert("RGBA")
-        else:
-            clean_img = img.convert("RGB")
+        clean_img = img.convert("RGBA") if img.mode in ("RGBA", "LA", "P") else img.convert("RGB")
         # Re-create from raw pixel data — severs any metadata/EXIF association
         sanitized = Image.frombytes(clean_img.mode, clean_img.size, clean_img.tobytes())
     except Exception as exc:

@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import { invalidate } from '$app/navigation';
 
-	type Source = { source_url: string; name: string; stage: string; total: number; counts: Record<string, number>; error: string | null };
+	type Source = { source_url: string; name: string; stage: string; total: number; counts: Record<string, number>; error: string | null; images?: Record<string, number> };
 	let sources = $state<Source[]>([]);
 	let connection = $state<'live' | 'reconnecting'>('live');
 	let refreshNow = () => {};
@@ -27,7 +27,7 @@
 				if (!active) return;
 				connection = 'live';
 				sources = next;
-				const nextSnapshot = JSON.stringify(next.map(({ source_url, total, counts, stage }) => ({ source_url, total, counts, stage })));
+				const nextSnapshot = JSON.stringify(next.map(({ source_url, total, counts, stage, images }) => ({ source_url, total, counts, stage, images })));
 				if (nextSnapshot !== snapshot) {
 					snapshot = nextSnapshot;
 					await invalidate('forkit:library');
@@ -67,8 +67,10 @@
 					{:else if source.stage === 'complete'} · Import finished
 					{:else if source.stage === 'backoff'} · Waiting before retrying
 					{:else if source.stage === 'discovering'} · Finding recipes
+					{:else if source.stage === 'images'} · Adding photos
 					{:else if source.stage === 'importing'} · Importing
 					{:else if source.counts.pending} · Queued{/if}
+					{#if source.images} · {(source.images.saved ?? 0) + (source.images.existing ?? 0)} photos{/if}
 					{#if source.counts.skipped} · {source.counts.skipped} pages without complete recipes{/if}
 					{#if source.counts.failed} · {source.counts.failed} failed{/if}
 					{#if source.counts.changed} · {source.counts.changed} source updates available for review{/if}

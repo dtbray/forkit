@@ -198,3 +198,126 @@ async def test_second_worker_does_not_overwrite_active_status(importer, monkeypa
         with pytest.raises(BlockingIOError):
             await importer.run()
     assert (importer.directory / "status.json").read_text() == before
+
+
+def photo_bytes():
+    import io
+
+    from PIL import Image
+
+    out = io.BytesIO()
+    Image.new("RGB", (1800, 1300), "orange").save(out, "JPEG")
+    return out.getvalue()
+
+
+async def test_image_backfill_uses_cached_page_and_survives_resume(
+    importer, monkeypatch, db_session, tmp_path
+):
+    from PIL import Image
+
+    from forkit import wordpress
+    from forkit.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "forkit_image_dir", str(tmp_path / "images"))
+    html = HTML.replace(
+        b'"@type":"Recipe"', b'"image":"https://recipes.example/photo.jpg","@type":"Recipe"'
+    )
+    calls = fake_site(monkeypatch, html=html)
+    original_fetch = wordpress.safe_fetch
+
+    async def fetch(url, **kwargs):
+        if url.endswith("/photo.jpg"):
+            calls.append(url)
+            return photo_bytes()
+        return await original_fetch(url, **kwargs)
+
+    monkeypatch.setattr(wordpress, "safe_fetch", fetch)
+    importer.images_enabled = False
+    await importer.run()
+    assert db_session.query(Recipe).one().hero_image_path is None
+    importer.images_enabled = True
+    await importer.run()
+    db_session.expire_all()
+    path = db_session.query(Recipe).one().hero_image_path
+    assert path and path.endswith("/hero.webp")
+    assert calls.count(BASE + "/lentils/") == 1
+    assert calls.count(BASE + "/photo.jpg") == 1
+    hero = Image.open(tmp_path / "images" / path)
+    assert max(hero.size) <= 1600
+    assert not hero.getexif()
+    assert (tmp_path / "images" / path.replace("hero.webp", "thumb.webp")).exists()
+    await importer.run()
+    assert calls.count(BASE + "/photo.jpg") == 1
+
+
+async def test_failed_image_is_nonfatal_and_retried_explicitly(importer, monkeypatch, tmp_path):
+    from forkit import wordpress
+    from forkit.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "forkit_image_dir", str(tmp_path / "images"))
+    html = HTML.replace(
+        b'"@type":"Recipe"', b'"image":"https://recipes.example/photo.jpg","@type":"Recipe"'
+    )
+    fake_site(monkeypatch, html=html)
+    original_fetch = wordpress.safe_fetch
+    attempts = 0
+
+    async def fetch(url, **kwargs):
+        nonlocal attempts
+        if url.endswith("/photo.jpg"):
+            attempts += 1
+            if attempts == 1:
+                raise FetchError("image missing", status_code=404)
+            return photo_bytes()
+        return await original_fetch(url, **kwargs)
+
+    monkeypatch.setattr(wordpress, "safe_fetch", fetch)
+    result = await importer.run()
+    assert result["counts"] == {"imported": 1}
+    assert result["images"] == {"failed": 1}
+    await importer.run()
+    assert attempts == 1
+    result = await importer.run(retry_failed=True)
+    assert attempts == 2
+    assert result["images"] == {"saved": 1}
+
+
+async def test_other_category_reuses_cached_page_and_recipe(
+    importer, monkeypatch, tmp_path, db_engine, db_session
+):
+    from forkit import wordpress
+    from forkit.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "forkit_image_dir", str(tmp_path / "images"))
+    html = HTML.replace(
+        b'"@type":"Recipe"', b'"image":"https://recipes.example/photo.jpg","@type":"Recipe"'
+    )
+    calls = fake_site(monkeypatch, html=html)
+    importer.images_enabled = False
+    await importer.run()
+    original_fetch = wordpress.safe_fetch
+
+    async def fetch(url, **kwargs):
+        if url.endswith("/photo.jpg"):
+            calls.append(url)
+            return photo_bytes()
+        return await original_fetch(url, **kwargs)
+
+    monkeypatch.setattr(wordpress, "safe_fetch", fetch)
+    other = CategoryImporter(
+        BASE + "/category/vegan/", state_root=tmp_path, session_factory=sessionmaker(bind=db_engine)
+    )
+    other.set_meta("discovered", "yes")
+    other.db.execute(
+        "INSERT INTO items(post_id,url,modified) VALUES(1,?,?)",
+        (BASE + "/lentils/", "2026-10-25T12:00:00"),
+    )
+    other.db.commit()
+    result = await other.run()
+    assert result["counts"] == {"existing": 1}
+    assert calls.count(BASE + "/lentils/") == 1
+    assert calls.count(BASE + "/photo.jpg") == 1
+    db_session.expire_all()
+    assert db_session.query(Recipe).count() == 1
+    assert db_session.query(Recipe).one().hero_image_path
+    other.db.close()

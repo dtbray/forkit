@@ -87,3 +87,17 @@ test('failed progress requests preserve the last counts and reconnect', async ({
 	await expect(page.getByLabel('Recipe imports')).toContainText('2 of 10 recipes saved');
 	await expect(page.getByLabel('Recipe imports')).toContainText('Live updates');
 });
+
+test('photo backfill updates an existing card without a manual refresh', async ({ page }) => {
+	let photoReady = false;
+	await page.route(/\/api\/recipes(\?.*)?$/, route => route.fulfill({ json: { recipes: [{ id: 'photo-recipe', title: 'Photo lentils', hero_image_path: photoReady ? 'test-photo/hero.webp' : null, cuisine: null, total_time: 'PT20M', cook_count: 0 }], total: 1, limit: 50, offset: 0 } }));
+	await page.route('**/api/imports', route => route.fulfill({ json: { sources: [{ source_url: 'https://www.budgetbytes.com/category/recipes/vegetarian/', name: 'Vegetarian Recipes', stage: 'images', total: 1, counts: { imported: 1 }, images: { saved: photoReady ? 1 : 0 }, error: null }] } }));
+	await page.route('**/data/images/test-photo/hero.webp', route => route.fulfill({ contentType: 'image/png', body: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a/TkAAAAASUVORK5CYII=', 'base64') }));
+	await page.goto('/recipes');
+	await expect(page.getByLabel('Recipe imports')).toContainText('Adding photos');
+	await expect(page.locator('.card-hero-img')).toHaveCount(0);
+	photoReady = true;
+	await expect(page.locator('.card-hero-img')).toBeVisible({ timeout: 10000 });
+	await expect(page.getByLabel('Recipe imports')).toContainText('1 photos');
+	await expect.poll(() => page.locator('.card-hero-img').evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0);
+});

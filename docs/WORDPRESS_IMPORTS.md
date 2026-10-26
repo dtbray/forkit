@@ -10,12 +10,13 @@ Run inside the application container, where the database and persistent `/data` 
 
 The importer fetches robots.txt using an identifying Forkit user agent and honors disallowed paths and crawl delays. It enumerates posts in ID order, 100 at a time, using WordPress pagination headers. Each fetched page and its discovery checkpoint commit together. A manifest snapshots the category membership for that run; a later refresh reconciles newly published posts. Concurrent site changes can affect offset-based pagination, so a refresh is needed before treating a long-running manifest as permanently exhaustive.
 
-Recipe requests are sequential, five seconds apart by default (minimum two seconds). HTTP 429 and transient failures trigger bounded exponential backoff and Retry-After handling; publisher access denials or repeated failures pause the run. Requests use the existing SSRF protections. Pages are compressed and cached by post ID plus modification timestamp. Imports require Recipe JSON-LD with ingredients and instructions; collection pages and incomplete recipes are recorded as skipped. Images are not downloaded during the bulk import, avoiding hundreds of additional requests. No AI credentials are needed.
+Recipe requests are sequential, five seconds apart by default (minimum two seconds). HTTP 429 and transient failures trigger bounded exponential backoff and Retry-After handling; publisher access denials or repeated failures pause the run. Requests use the existing SSRF protections. Pages are compressed and cached by post ID plus modification timestamp. Imports require Recipe JSON-LD with ingredients and instructions; collection pages and incomplete recipes are recorded as skipped. Images are downloaded with the same pacing as recipe pages, sanitized into local WebP variants, and attached without modifying recipe text. Existing recipes receive photos from their cached JSON-LD pages before pending imports resume; cached pages from other categories on the same site are reused. Photo failures are checkpointed independently and do not discard a saved recipe. No AI credentials are needed.
 
 State, compressed pages, per-item errors and atomic progress snapshots live under `/data/imports/<source-hash>/`. Recipe commits are checked on resume, including recovery when a process stops between saving a recipe and recording its checkpoint. A per-source process lock prevents duplicate workers. Existing recipes and user edits are retained.
 
 Options:
 
+- `--no-images`: skip the photo backfill and downloads for a text-only run.
 - `--limit 5`: process up to five pending candidates, useful for a canary.
 - `--refresh`: re-enumerate category metadata; unchanged recipes are not fetched again.
 - `--retry-failed`: retry recorded failures using cached pages when available.
