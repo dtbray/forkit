@@ -17,5 +17,5 @@ jobs:
         run: |
           echo "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
           image="ghcr.io/dtbray/forkit:sha-$GITHUB_SHA"
-          docker build --label "org.opencontainers.image.source=https://github.com/dtbray/forkit" --label "org.opencontainers.image.revision=$GITHUB_SHA" -f backend/Dockerfile -t "$image" .
+          docker build --provenance=false --label "org.opencontainers.image.source=https://github.com/dtbray/forkit" --label "org.opencontainers.image.revision=$GITHUB_SHA" -f backend/Dockerfile -t "$image" .
           docker push "$image"
