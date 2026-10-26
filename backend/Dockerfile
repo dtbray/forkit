@@ -50,6 +50,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy installed packages from builder
 COPY --from=builder /install /usr/local
 
+# Bundle the POS tagger: the unprivileged runtime must not download language data.
+ENV NLTK_DATA=/usr/local/share/nltk_data
+RUN python -m nltk.downloader -d /usr/local/share/nltk_data averaged_perceptron_tagger_eng \
+    && python -c "import nltk; nltk.data.find('taggers/averaged_perceptron_tagger_eng')"
+
 # Copy application source
 COPY backend/src ./src
 COPY backend/pyproject.toml ./

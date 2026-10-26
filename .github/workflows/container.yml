@@ -33,5 +33,6 @@ jobs:
           test "$ready" = 1
           curl -fsS http://127.0.0.1:8080/ >/dev/null
           curl -fsS http://127.0.0.1:8080/api/recipes >/dev/null
+          docker exec forkit-smoke python3 -c "from forkit.parser.ingredients import structure_ingredient; r = structure_ingredient('2 cups flour'); assert r['qty'] == '2' and r['unit'] == 'cup' and r['item'] == 'flour', r"
           docker rm -f forkit-smoke
           docker push "$image"

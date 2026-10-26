@@ -39,13 +39,15 @@ def structure_ingredient(raw_text: str) -> dict[str, Any]:
             unit_val = getattr(first_amount, "unit", None)
             unit = str(unit_val).strip() if unit_val else None
 
-        item_text: str | None = None
-        if result.name:
-            item_text = result.name.text.strip() if result.name.text else None
+        def text_parts(value: Any) -> str | None:
+            # Current ingredient-parser returns a list of name spans. Older
+            # versions and optional fields may return a single IngredientText.
+            parts = value if isinstance(value, list) else [value]
+            texts = [str(part.text).strip() for part in parts if getattr(part, "text", None)]
+            return ", ".join(texts) or None
 
-        notes_text: str | None = None
-        if result.comment:
-            notes_text = result.comment.text.strip() if result.comment.text else None
+        item_text = text_parts(result.name)
+        notes_text = text_parts(result.comment)
 
         canonical_token = (item_text or raw_text).lower().strip()
 
