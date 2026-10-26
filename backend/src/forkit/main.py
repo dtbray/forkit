@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import mimetypes
 import pathlib
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
@@ -120,6 +121,9 @@ async def health() -> dict[str, str]:
         "image_dir": str(settings.forkit_image_dir),
     }
 
+
+# Register WebP even on slim images without a system MIME database.
+mimetypes.add_type("image/webp", ".webp")
 
 # Serve uploaded recipe images from the settings-driven image dir.
 # In Docker this resolves to /data/images; in local dev it follows FORKIT_IMAGE_DIR.
