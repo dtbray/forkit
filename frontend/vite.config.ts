@@ -45,7 +45,7 @@ export default defineConfig({
 				runtimeCaching: [
 					{
 						// Mutations must be visible on the next read; do not serve stale personal notes.
-						urlPattern: ({ url }) => /^\/api\/recipes(?:\/|$)/.test(url.pathname),
+						urlPattern: ({ url }) => /^\/api\/(?:recipes|pantry)(?:\/|$)/.test(url.pathname),
 						handler: 'NetworkOnly'
 					},
 					{

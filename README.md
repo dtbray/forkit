@@ -506,3 +506,11 @@ Contributions are welcome! Whether it's a bug fix, new discovery site adapter, o
 Forkit is provided as-is. See the LICENSE file for details.
 
 Recipe data from Food.com is CC-BY-SA 3.0. Respect those terms when using the dataset.
+
+### Kitchen ingredients: photo, typing and mobile dictation
+
+Open **Pantry** to review ingredients before adding them to your shared kitchen
+list, then see library recipes with matched and missing ingredients. Use the
+phone keyboard's microphone for dictation. Photo recognition uses a one-time
+**Sign in with ChatGPT** connection and your account's available image-capable
+models, with no separate API key. See [setup, privacy and acceptance checks](docs/PANTRY.md).

@@ -3,6 +3,7 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+  pull_request:
 permissions:
   contents: read
   packages: write
@@ -31,6 +32,7 @@ jobs:
           /tmp/forkit-tests/bin/pip install uv==0.11.26
           /tmp/forkit-tests/bin/uv run --project backend --locked --extra dev pytest backend/tests -q
       - name: Build and publish
+        if: github.event_name != 'pull_request'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |

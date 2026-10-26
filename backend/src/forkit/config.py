@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     forkit_anthropic_api_key: SecretStr = SecretStr("")
     forkit_anthropic_model: str = "claude-sonnet-4-6"
     forkit_llm_timeout_sec: int = 30
+    forkit_chatgpt_credentials_path: str = "/data/chatgpt/credentials.json"
     forkit_log_level: str = "INFO"
     # Discovery / Phase 1
     forkit_discovery_search_timeout_sec: int = 5
