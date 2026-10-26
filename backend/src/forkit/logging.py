@@ -8,33 +8,27 @@ from typing import Any
 
 import structlog
 
-
 # Patterns that must never appear in log output
 _REDACT_KEYS = frozenset({"authorization", "x-api-key", "forkit_anthropic_api_key"})
 _API_KEY_RE = re.compile(r"sk-ant-[A-Za-z0-9\-_]{10,}")
 
 
-def _redact_processor(
-    logger: Any, method: str, event_dict: dict[str, Any]
-) -> dict[str, Any]:
+def _redact_processor(logger: Any, method: str, event_dict: dict[str, Any]) -> dict[str, Any]:
     """Strip Authorization headers and Anthropic API key values from event dicts."""
-    for key in list(event_dict.keys()):
-        if key.lower() in _REDACT_KEYS:
-            event_dict[key] = "[REDACTED]"
-            continue
-        val = event_dict[key]
-        if isinstance(val, str) and _API_KEY_RE.search(val):
-            event_dict[key] = _API_KEY_RE.sub("[REDACTED]", val)
-        elif isinstance(val, dict):
-            # Recurse one level — covers headers dicts
-            for inner_key in list(val.keys()):
-                if inner_key.lower() in _REDACT_KEYS:
-                    val[inner_key] = "[REDACTED]"
-                elif isinstance(val[inner_key], str) and _API_KEY_RE.search(
-                    val[inner_key]
-                ):
-                    val[inner_key] = _API_KEY_RE.sub("[REDACTED]", val[inner_key])
-    return event_dict
+
+    def redact(value: Any) -> Any:
+        if isinstance(value, str):
+            return _API_KEY_RE.sub("[REDACTED]", value)
+        if isinstance(value, dict):
+            return {
+                key: "[REDACTED]" if str(key).lower() in _REDACT_KEYS else redact(item)
+                for key, item in value.items()
+            }
+        if isinstance(value, (list, tuple)):
+            return [redact(item) for item in value]
+        return value
+
+    return redact(event_dict)
 
 
 def configure_logging(log_level: str = "INFO") -> None:
@@ -44,7 +38,6 @@ def configure_logging(log_level: str = "INFO") -> None:
         structlog.stdlib.add_log_level,
         structlog.stdlib.add_logger_name,
         structlog.processors.TimeStamper(fmt="iso"),
-        _redact_processor,
         structlog.processors.StackInfoRenderer(),
         structlog.processors.format_exc_info,
     ]
@@ -60,9 +53,13 @@ def configure_logging(log_level: str = "INFO") -> None:
     )
 
     formatter = structlog.stdlib.ProcessorFormatter(
+        # Foreign (stdlib) records still have _record metadata here, allowing
+        # add_logger_name to work even when ProcessorFormatter passes logger=None.
+        foreign_pre_chain=shared_processors,
         processors=[
             structlog.stdlib.ProcessorFormatter.remove_processors_meta,
-            *shared_processors,
+            # Redact after exception rendering, covering messages and traceback text.
+            _redact_processor,
             structlog.processors.JSONRenderer(),
         ],
     )
