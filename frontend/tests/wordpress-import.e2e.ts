@@ -92,7 +92,7 @@ test('photo backfill updates an existing card without a manual refresh', async (
 	let photoReady = false;
 	await page.route(/\/api\/recipes(\?.*)?$/, route => route.fulfill({ json: { recipes: [{ id: 'photo-recipe', title: 'Photo lentils', hero_image_path: photoReady ? 'test-photo/hero.webp' : null, cuisine: null, total_time: 'PT20M', cook_count: 0 }], total: 1, limit: 50, offset: 0 } }));
 	await page.route('**/api/imports', route => route.fulfill({ json: { sources: [{ source_url: 'https://www.budgetbytes.com/category/recipes/vegetarian/', name: 'Vegetarian Recipes', stage: 'images', total: 1, counts: { imported: 1 }, images: { saved: photoReady ? 1 : 0 }, error: null }] } }));
-	await page.route('**/data/images/test-photo/hero.webp', route => route.fulfill({ contentType: 'image/png', body: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a/TkAAAAASUVORK5CYII=', 'base64') }));
+	await page.route('**/data/images/test-photo/hero.webp', route => route.fulfill({ contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"><rect width="1" height="1" fill="orange"/></svg>' }));
 	await page.goto('/recipes');
 	await expect(page.getByLabel('Recipe imports')).toContainText('Adding photos');
 	await expect(page.locator('.card-hero-img')).toHaveCount(0);
